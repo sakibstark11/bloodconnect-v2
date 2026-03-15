@@ -1,123 +1,183 @@
 package main
 
 import (
-	"context"
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
+	"net/http"
+	"sync"
 	"time"
 
-	"github.com/sakibalam/bloodconnect/adapters/dummy"
-	"github.com/sakibalam/bloodconnect/adapters/sqlite"
-	"github.com/sakibalam/bloodconnect/application"
-	"github.com/sakibalam/bloodconnect/domain"
-	"github.com/uber/h3-go/v4"
 )
 
-// Dhaka approximate bounding box for random generation
 const (
-	minLat      = 23.68
-	maxLat      = 23.90
-	minLng      = 90.33
-	maxLng      = 90.50
-	maxBagCount = 5
-	maxDaysOut  = 8
+	baseURL     = "http://localhost:8080"
+	maxUsers    = 10_000
 	maxRequests = 50
-	maxUsers    = 1_000_000
+	numWorkers  = 5
 )
 
-var bloodTypes = []domain.BloodType{
-	domain.BloodTypeAPos, domain.BloodTypeANeg,
-	domain.BloodTypeBPos, domain.BloodTypeBNeg,
-	domain.BloodTypeABPos, domain.BloodTypeABNeg,
-	domain.BloodTypeOPos, domain.BloodTypeONeg,
+var (
+	bloodTypes     = []string{"A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"}
+	minLat, maxLat = 23.68, 23.90
+	minLng, maxLng = 90.33, 90.50
+)
+
+type client struct {
+	hc *http.Client
 }
 
 func main() {
-	log.Println("Starting data population...")
+	start := time.Now()
+	log.Printf("Starting data population with %d workers...", numWorkers)
 
-	// Initialize DB
-	db, err := sqlite.SetupDatabase("bloodconnect.db")
-	if err != nil {
-		log.Fatalf("failed to initialize database: %v", err)
+	c := &client{
+		hc: &http.Client{
+			Timeout: 15 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        numWorkers,
+				MaxIdleConnsPerHost: numWorkers,
+			},
+		},
 	}
 
-	userRepo := sqlite.NewUserRepository(db)
-	notifRepo := sqlite.NewNotificationRepository(db)
-	notifSender := dummy.NewNotificationSender()
-	requestRepo := sqlite.NewRequestRepository(db)
-	queue := sqlite.NewJobQueue(db)
+	userIDsChan := make(chan string, maxUsers)
+	var userWg sync.WaitGroup
 
-	appConfig := application.DefaultAppConfig()
-
-	userService := application.NewUserService(userRepo)
-	notifService := application.NewNotificationService(notifRepo, notifSender)
-	requestService := application.NewRequestService(requestRepo, queue, notifService, appConfig)
-
-	ctx := context.Background()
-
-	// 1. Generate 1000 random users in Dhaka
-	log.Printf("Generating %d random users...", maxUsers)
-	var userIDs []string
-
-	// Create a run-specific suffix to avoid unique constraint collisions
-	runSuffix := time.Now().UnixNano() % 100000
+	// 1. Worker Pool for User Creation
+	jobs := make(chan int, maxUsers)
+	for w := 1; w <= numWorkers; w++ {
+		userWg.Add(1)
+		go func() {
+			defer userWg.Done()
+			for i := range jobs {
+				uid, err := populateUser(c, i)
+				if err == nil {
+					userIDsChan <- uid
+				}
+			}
+		}()
+	}
 
 	for i := 0; i < maxUsers; i++ {
-		name := fmt.Sprintf("User %d", i)
-		email := fmt.Sprintf("user%d_%d@example.com", i, runSuffix)
-		phone := fmt.Sprintf("+8801%d%04d", runSuffix, i)
+		jobs <- i
+	}
+	close(jobs)
+	userWg.Wait()
+	close(userIDsChan)
 
-		uid, err := userService.Signup(ctx, name, email, "password123", phone)
-		if err != nil {
-			log.Printf("Failed to create user %d: %v", i, err)
-			continue
-		}
-
+	var userIDs []string
+	for uid := range userIDsChan {
 		userIDs = append(userIDs, uid)
-
-		// Set random blood type
-		bType := bloodTypes[rand.Intn(len(bloodTypes))]
-		_ = userService.UpdateHealth(ctx, uid, domain.InfoTypeBloodType, string(bType))
-
-		// Set random location in Bangladesh
-		lat := minLat + rand.Float64()*(maxLat-minLat)
-		lng := minLng + rand.Float64()*(maxLng-minLng)
-		cell, _ := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, 9)
-		hexStr := cell.String()
-		_ = userService.UpdateLocation(ctx, uid, lat, lng, hexStr)
 	}
 
-	// 2. Generate 5 blood requests
-	log.Printf("Generating %d blood requests...\n", maxRequests)
-	if len(userIDs) == 0 {
-		log.Fatalf("No users were created, cannot generate requests!")
-	}
-
+	// 2. Generate Blood Requests with WaitGroup
+	log.Printf("Generating %d requests...", maxRequests)
+	var reqWg sync.WaitGroup // NEW: Added WaitGroup for requests
 	for i := 0; i < maxRequests; i++ {
-		uid := userIDs[rand.Intn(len(userIDs))]
-		bType := bloodTypes[rand.Intn(len(bloodTypes))]
-
-		lat := minLat + rand.Float64()*(maxLat-minLat)
-		lng := minLng + rand.Float64()*(maxLng-minLng)
-
-		daysOut := rand.Intn(maxDaysOut) + 1
-		reqDate := time.Now().AddDate(0, 0, daysOut)
-
-		bagCount := rand.Intn(maxBagCount) + 1
-
-		reqID, err := requestService.SubmitRequest(ctx,
-			uid, string(bType), "+8801900000000",
-			fmt.Sprintf("Urgent blood needed for patient %d", i),
-			"Dhaka Medical College", "Dhaka Hospital", lat, lng, bagCount, reqDate)
-
-		if err != nil {
-			log.Printf("Failed to create request: %v", err)
-			continue
+		if len(userIDs) > 0 {
+			reqWg.Add(1)
+			go func(idx int) {
+				defer reqWg.Done()
+				uid := userIDs[rand.Intn(len(userIDs))]
+				populateRequest(c, idx, uid)
+			}(i)
 		}
-
-		log.Printf("Created request %s for %s (%d bags)", reqID, bType, bagCount)
 	}
 
-	log.Println("Data population complete!")
+	reqWg.Wait() // NEW: Wait for all request goroutines to finish
+	log.Printf("Process completed in %v", time.Since(start))
+}
+
+func populateUser(c *client, index int) (string, error) {
+	suffix := time.Now().UnixNano() % 100000
+	email := fmt.Sprintf("user%d_%d@example.com", index, suffix)
+	phone := fmt.Sprintf("+8801%d%04d", suffix%100, index%10000)
+
+	res, err := c.doRequest(http.MethodPost, "/users/signup", map[string]string{
+		"name":     fmt.Sprintf("User %d", index),
+		"email":    email,
+		"password": "password123",
+		"phone":    phone,
+	})
+	if err != nil {
+		log.Printf("User creation failed: %v", err)
+		return "", err
+	}
+	uid := res["id"].(string)
+
+	bType := bloodTypes[rand.Intn(len(bloodTypes))]
+	_ = c.updateHealth(uid, "blood_type", bType)
+
+	lat := minLat + rand.Float64()*(maxLat-minLat)
+	lng := minLng + rand.Float64()*(maxLng-minLng)
+	_ = c.updateLocation(uid, lat, lng)
+
+	return uid, nil
+}
+
+func populateRequest(c *client, i int, uid string) {
+	lat := minLat + rand.Float64()*(maxLat-minLat)
+	lng := minLng + rand.Float64()*(maxLng-minLng)
+
+	payload := map[string]interface{}{
+		"user_id":          uid,
+		"location_lat":     lat,
+		"location_lng":     lng,
+		"bag_count":        rand.Intn(5) + 1,
+		"required_by_date": time.Now().AddDate(0, 0, 3).Format(time.RFC3339),
+		"blood_type":       bloodTypes[rand.Intn(len(bloodTypes))],
+		"contact_phone":    fmt.Sprintf("+8801%d%04d", i%100, i%10000),
+		"description":      fmt.Sprintf("Urgent request #%d", i),
+		"requester_info":   "Emergency Unit",
+		"location_name":    "City Hospital",
+	}
+	_, err := c.doRequest(http.MethodPost, "/requests", payload)
+	if err != nil {
+		log.Printf("Failed to create request %d: %v", i, err)
+	} else {
+		log.Printf("Successfully created request %d", i)
+	}
+}
+
+// --- Reusable HTTP logic ---
+
+func (c *client) updateHealth(uid, infoType, details string) error {
+	_, err := c.doRequest(http.MethodPut, "/users/health", map[string]string{
+		"user_id": uid, "info_type": infoType, "details": details,
+	})
+	return err
+}
+
+func (c *client) updateLocation(uid string, lat, lng float64) error {
+	_, err := c.doRequest(http.MethodPut, "/users/location", map[string]interface{}{
+		"user_id": uid, "lat": lat, "lng": lng,
+	})
+	return err
+}
+
+func (c *client) doRequest(method, path string, body interface{}) (map[string]interface{}, error) {
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest(method, baseURL+path, bytes.NewBuffer(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result map[string]interface{}
+	if resp.ContentLength != 0 {
+		json.NewDecoder(resp.Body).Decode(&result)
+	}
+	return result, nil
 }

@@ -114,7 +114,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [user_id, lat, lng, h3_hex]
+              required: [user_id, lat, lng]
               properties:
                 user_id:
                   type: string
@@ -122,8 +122,6 @@ paths:
                   type: number
                 lng:
                   type: number
-                h3_hex:
-                  type: string
       responses:
         '200':
           description: OK
@@ -236,7 +234,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [user_id, location_hex, location_lat, location_lng, bag_count, required_by_date, blood_type, contact_phone, description, requester_info, location_name]
+              required: [user_id, location_lat, location_lng, bag_count, required_by_date, blood_type, contact_phone, description, requester_info, location_name]
               properties:
                 user_id:
                   type: string

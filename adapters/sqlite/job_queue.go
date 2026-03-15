@@ -46,3 +46,8 @@ func (q *jobQueue) MarkStatus(ctx context.Context, id string, status domain.JobS
 	res := q.db.WithContext(ctx).Model(&jobModel{}).Where("id = ?", id).Update("status", string(status))
 	return res.Error
 }
+
+func (q *jobQueue) Delete(ctx context.Context, id string) error {
+	res := q.db.WithContext(ctx).Where("id = ?", id).Delete(&jobModel{})
+	return res.Error
+}

@@ -11,4 +11,5 @@ type JobQueue interface {
 	Enqueue(ctx context.Context, job *domain.Job) error
 	FetchNextAvailable(ctx context.Context) (*domain.Job, error)
 	MarkStatus(ctx context.Context, id string, status domain.JobStatus) error
+	Delete(ctx context.Context, id string) error
 }

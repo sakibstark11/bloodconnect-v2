@@ -18,7 +18,7 @@ body {
 
 .map-container {
   flex-grow: 1;
-  min-height: calc(100vh - 80px); /* Account for header */
+  height: calc(100vh - 80px); /* Account for header */
   width: 100%;
 }
 

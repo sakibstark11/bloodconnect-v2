@@ -37,4 +37,5 @@ type WaveSearchPayload struct {
 	CurrentRing       int    `json:"current_ring"`
 	CenterHex         string `json:"center_hex"`
 	UsersLeftToSearch int    `json:"users_left_to_search"`
+	RetryCount        int    `json:"retry_count"`
 }

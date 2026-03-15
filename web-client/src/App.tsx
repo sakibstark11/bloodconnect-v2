@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { useState, useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polygon } from 'react-leaflet';
+import { cellToBoundary } from 'h3-js';
 import { Search, Droplets } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -19,55 +20,92 @@ interface RequestData {
   bagCount: number;
   lat: number;
   lng: number;
+  h3Hex: string;
   status: string;
   locationName: string;
 }
 
+interface NotifiedUserData {
+  user_id: string;
+  lat: number;
+  lng: number;
+  h3_hex: string;
+  action: string;
+}
+
 function App() {
-  const [requestId, setRequestId] = useState('');
+  const [requestId, setRequestId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('id') || '';
+  });
   const [requestData, setRequestData] = useState<RequestData | null>(null);
-  const [searchRadiusKm, setSearchRadiusKm] = useState<number>(0);
-  const [notifiedUsers, setNotifiedUsers] = useState<Array<{lat: number, lng: number}>>([]);
+  const [notifiedUsers, setNotifiedUsers] = useState<NotifiedUserData[]>([]);
+  const [isTracking, setIsTracking] = useState(!!requestId);
   
   // Bangladesh center default
   const defaultCenter: [number, number] = [23.8103, 90.4125];
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!requestId) return;
-
+  const fetchRequestData = async (reqId: string) => {
     try {
-      // In a real scenario, this would fetch from our Go backend:
-      // const res = await fetch(`http://localhost:8080/requests/${requestId}/visualization-data`);
-      // const data = await res.json();
+      const res = await fetch(`http://localhost:8080/requests/${reqId}`);
+      if (!res.ok) {
+        throw new Error(`Error fetching request: ${res.statusText}`);
+      }
+      const data = await res.json();
       
-      // For now, let's mock the response visualization data since we don't have
-      // an explicit visualization endpoint returning users and ring radius yet
-      console.log('Fetching visualization data for:', requestId);
-      
-      // MOCK DATA based on DB seeder
+      const req = data.request;
       setRequestData({
-        id: requestId,
-        bloodType: 'A+',
-        bagCount: 2,
-        lat: 23.8103 + (Math.random() - 0.5) * 0.1,
-        lng: 90.4125 + (Math.random() - 0.5) * 0.1,
-        status: 'Pending',
-        locationName: 'Dhaka Hospital'
+        id: req.ID,
+        bloodType: req.BloodType,
+        bagCount: req.BagCount,
+        lat: req.LocationLat,
+        lng: req.LocationLng,
+        h3Hex: req.LocationHex,
+        status: req.Status,
+        locationName: req.LocationName
       });
       
-      // Simulate ring 2 radius (approx 10km radius per ring, so 20km)
-      setSearchRadiusKm(20);
-      
-      // Simulate 3 notified users nearby
-      setNotifiedUsers([
-        { lat: 23.8153, lng: 90.4175 },
-        { lat: 23.8013, lng: 90.4025 },
-        { lat: 23.8203, lng: 90.4225 },
-      ]);
-
+      setNotifiedUsers(data.notified_users || []);
     } catch (err) {
       console.error('Failed to fetch request data', err);
+    }
+  };
+
+  useEffect(() => {
+    let interval: number;
+    if (isTracking && requestId) {
+      // Fetch immediately once
+      fetchRequestData(requestId);
+      // Then poll every 5 seconds
+      interval = window.setInterval(() => {
+        fetchRequestData(requestId);
+      }, 5000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTracking, requestId]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!requestId) return;
+    
+    // Update URL without reloading the page
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('id', requestId);
+    window.history.pushState({}, '', newUrl);
+
+    setIsTracking(true);
+  };
+  
+  // Helper to draw a hex cell as Leaflet LatLng tuples
+  const getHexPolygon = (hex: string): [number, number][] => {
+    try {
+      const boundary = cellToBoundary(hex);
+      // h3 returns [lat, lng], Leaflet Polygon expects [lat, lng] tuples
+      return boundary as [number, number][];
+    } catch (e) {
+      return [];
     }
   };
 
@@ -123,29 +161,51 @@ function App() {
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          {requestData && (
+           {requestData && (
              <>
-               {/* Request Origin Marker */}
-               <Marker position={[requestData.lat, requestData.lng]}>
-                 <Popup>
-                   <strong>Blood Request Origin</strong><br/>
-                   Needed: {requestData.bloodType} ({requestData.bagCount} bags)
-                 </Popup>
-               </Marker>
+               {/* Request Origin Marker & Hex */}
+               {requestData.lat !== undefined && requestData.lng !== undefined && (
+                 <>
+                   <Marker position={[requestData.lat, requestData.lng]}>
+                     <Popup>
+                       <strong>Blood Request Origin</strong><br/>
+                       Needed: {requestData.bloodType} ({requestData.bagCount} bags)
+                     </Popup>
+                   </Marker>
+                   
+                   {requestData.h3Hex && (
+                     <Polygon 
+                       positions={getHexPolygon(requestData.h3Hex)} 
+                       pathOptions={{ color: '#e53935', fillColor: '#e53935', fillOpacity: 0.2, weight: 2 }} 
+                     />
+                   )}
+                 </>
+               )}
 
-               {/* Search Radius Representation */}
-               <Circle 
-                 center={[requestData.lat, requestData.lng]} 
-                 radius={searchRadiusKm * 1000} // meters
-                 pathOptions={{ color: '#e53935', fillColor: '#e53935', fillOpacity: 0.1 }}
-               />
-
-               {/* Notified Users Markers */}
-               {notifiedUsers.map((u, idx) => (
-                 <Marker key={idx} position={[u.lat, u.lng]} opacity={0.6}>
-                   <Popup>Notified Donor #{idx+1}</Popup>
-                 </Marker>
-               ))}
+               {/* Notified Users Hexagons */}
+               {notifiedUsers
+                 .filter(u => u.h3_hex)
+                 .map((u, idx) => {
+                   let color = '#2b82e2'; // pending color (blue)
+                   let fillOpacity = 0.2;
+                   
+                   if (u.action === 'Accepted' || u.action === 'Donated') {
+                     color = '#43a047'; // accepted/donated color (green)
+                     fillOpacity = 0.5;
+                   } else if (u.action === 'Declined') {
+                     color = '#757575'; // declined color (grey)
+                   }
+                   
+                   return (
+                     <Polygon 
+                       key={idx}
+                       positions={getHexPolygon(u.h3_hex)} 
+                       pathOptions={{ color, fillColor: color, fillOpacity, weight: 1 }} 
+                     >
+                       <Popup>Notified Donor #{idx+1} ({u.action || 'Pending'})</Popup>
+                     </Polygon>
+                   );
+               })}
              </>
           )}
 

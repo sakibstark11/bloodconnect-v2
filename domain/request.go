@@ -2,6 +2,12 @@ package domain
 
 import "time"
 
+type ContextKey string
+
+const (
+	TraceIDKey ContextKey = "trace_id"
+)
+
 // RequestStatus represents the state of the overall donation request
 type RequestStatus string
 
@@ -9,6 +15,7 @@ const (
 	RequestStatusPending   RequestStatus = "Pending"
 	RequestStatusCompleted RequestStatus = "Completed"
 	RequestStatusCancelled RequestStatus = "Cancelled"
+	RequestStatusFailed    RequestStatus = "Failed"
 )
 
 // BloodType represents the standard A/B/O blood types
@@ -42,6 +49,21 @@ type DonationRequest struct {
 	Status         RequestStatus
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+// RequestActionedUser represents an individual tracking response
+type RequestActionedUser struct {
+	UserID string       `json:"user_id"`
+	Lat    float64      `json:"lat"`
+	Lng    float64      `json:"lng"`
+	H3Hex  string       `json:"h3_hex"`
+	Action ActionStatus `json:"action"`
+}
+
+// ExtendedDonationRequest provides the request details alongside the locations of all people notified
+type ExtendedDonationRequest struct {
+	Request       *DonationRequest       `json:"request"`
+	NotifiedUsers []RequestActionedUser  `json:"notified_users"`
 }
 
 // ActionStatus represents the individual donor's response to a request

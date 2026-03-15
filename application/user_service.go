@@ -8,21 +8,23 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/sakibalam/bloodconnect/domain"
 	"github.com/sakibalam/bloodconnect/ports"
+	"github.com/uber/h3-go/v4"
 )
 
 type UserService interface {
 	Signup(ctx context.Context, name, email, password, phone string) (string, error)
 	Login(ctx context.Context, email, password string) (*domain.User, error)
 	UpdateHealth(ctx context.Context, userID string, infoType domain.InfoType, details string) error
-	UpdateLocation(ctx context.Context, userID string, lat, lng float64, h3Hex string) error
+	UpdateLocation(ctx context.Context, userID string, lat, lng float64) error
 }
 
 type userService struct {
-	repo ports.UserRepository
+	repo   ports.UserRepository
+	config *AppConfig
 }
 
-func NewUserService(repo ports.UserRepository) UserService {
-	return &userService{repo: repo}
+func NewUserService(repo ports.UserRepository, config *AppConfig) UserService {
+	return &userService{repo: repo, config: config}
 }
 
 func (s *userService) Signup(ctx context.Context, name, email, password, phone string) (string, error) {
@@ -75,12 +77,13 @@ func (s *userService) UpdateHealth(ctx context.Context, userID string, infoType 
 	return s.repo.UpdateUserHealth(ctx, health)
 }
 
-func (s *userService) UpdateLocation(ctx context.Context, userID string, lat, lng float64, h3Hex string) error {
+func (s *userService) UpdateLocation(ctx context.Context, userID string, lat, lng float64) error {
+	cell, _ := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, s.config.H3HexResolution)
 	loc := &domain.UserPreferredDonationLocation{
 		UserID:    userID,
 		Lat:       lat,
 		Lng:       lng,
-		H3Hex:     h3Hex,
+		H3Hex:     cell.String(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

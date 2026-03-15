@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"math"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/sakibalam/bloodconnect/domain"
 	"github.com/sakibalam/bloodconnect/ports"
 	"github.com/uber/h3-go/v4"
+	"go.uber.org/zap"
 )
 
 type JobWorkerService interface {
@@ -28,9 +28,10 @@ type jobWorkerService struct {
 	userRepo     ports.UserRepository
 	notifService NotificationService
 	config       *jobWorkerServiceConfig
+	logger       *zap.Logger
 }
 
-func NewJobWorkerService(queue ports.JobQueue, reqRepo ports.RequestRepository, userRepo ports.UserRepository, notifService NotificationService, config *AppConfig) (JobWorkerService, error) {
+func NewJobWorkerService(queue ports.JobQueue, reqRepo ports.RequestRepository, userRepo ports.UserRepository, notifService NotificationService, config *AppConfig, logger *zap.Logger) (JobWorkerService, error) {
 	edgeLen, err := h3.HexagonEdgeLengthAvgKm(config.H3HexResolution)
 	if err != nil {
 		return nil, err
@@ -47,11 +48,12 @@ func NewJobWorkerService(queue ports.JobQueue, reqRepo ports.RequestRepository, 
 		userRepo:     userRepo,
 		notifService: notifService,
 		config:       internalConfig,
+		logger:       logger.With(zap.String("service", "JobWorkerService")),
 	}, nil
 }
 
 func (s *jobWorkerService) Start(ctx context.Context) {
-	log.Println("Starting background job worker...")
+	s.logger.Info("Starting background job worker...")
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -59,7 +61,7 @@ func (s *jobWorkerService) Start(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("Stopping background job worker...")
+				s.logger.Info("Stopping background job worker...")
 				return
 			case <-ticker.C:
 				s.processNextJob(ctx)
@@ -71,39 +73,41 @@ func (s *jobWorkerService) Start(ctx context.Context) {
 func (s *jobWorkerService) processNextJob(ctx context.Context) {
 	job, err := s.queue.FetchNextAvailable(ctx)
 	if err != nil {
-		log.Printf("Error fetching next job: %v\n", err)
+		s.logger.Error("Error fetching next job", zap.Error(err))
 		return
 	}
 	if job == nil {
 		return // No jobs ready
 	}
 
+	jobLogger := s.logger.With(zap.String("job_id", job.ID), zap.String("job_type", string(job.Type)))
+
 	// Mark as processing
 	if err := s.queue.MarkStatus(ctx, job.ID, domain.JobStatusProcessing); err != nil {
-		log.Printf("Error marking job %s as processing: %v\n", job.ID, err)
+		jobLogger.Error("Error marking job as processing", zap.Error(err))
 		return
 	}
 
-	log.Printf("Processing job: %s of type %s\n", job.ID, job.Type)
+	jobLogger.Info("Processing job")
 
 	var processErr error
 	switch job.Type {
 	case domain.JobTypeWaveSearch:
-		processErr = s.processWaveSearch(ctx, job)
+		processErr = s.processWaveSearch(ctx, job, jobLogger)
 	default:
-		log.Printf("Unknown job type: %s\n", job.Type)
+		jobLogger.Warn("Unknown job type")
 	}
 
 	if processErr != nil {
-		log.Printf("Job failed: %s, error: %v\n", job.ID, processErr)
+		jobLogger.Error("Job failed", zap.Error(processErr))
 		_ = s.queue.MarkStatus(ctx, job.ID, domain.JobStatusFailed)
 	} else {
-		log.Printf("Job completed: %s\n", job.ID)
-		_ = s.queue.MarkStatus(ctx, job.ID, domain.JobStatusCompleted)
+		jobLogger.Info("Job processed successfully, deleting from queue")
+		_ = s.queue.Delete(ctx, job.ID)
 	}
 }
 
-func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Job) error {
+func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Job, jobLogger *zap.Logger) error {
 	var payload domain.WaveSearchPayload
 	if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
 		return err
@@ -114,15 +118,23 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 	if err != nil {
 		return err
 	}
+	// Append request_id context now that we've decoded it
+	reqLogger := jobLogger.With(zap.String("request_id", req.ID))
+
 	if req.Status != domain.RequestStatusPending {
 		// Stop processing if request was fulfilled or cancelled
-		log.Printf("Request %s is not pending, skipping job %s\n", req.ID, job.ID)
+		reqLogger.Info("Request is not pending, skipping job", zap.String("status", string(req.Status)))
 		return nil
 	}
 
 	centerCell := h3.Cell(h3.IndexFromString(payload.CenterHex))
 
-	log.Printf("Processing wave search for request %s, ring %d, users left to search %d, bags needed %d\n", req.ID, payload.CurrentRing, payload.UsersLeftToSearch, req.BagCount)
+	reqLogger.Info("Processing wave search",
+		zap.Int("ring", payload.CurrentRing),
+		zap.Int("retry", payload.RetryCount),
+		zap.Int("users_left_to_search", payload.UsersLeftToSearch),
+		zap.Int("bag_count", req.BagCount),
+	)
 
 	var ringHexes []h3.Cell
 
@@ -169,7 +181,11 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		return err
 	}
 
-	log.Printf("found %d users in ring %d for request %s", len(usersInRing), payload.CurrentRing, req.ID)
+	reqLogger.Info("Found eligible users in hexes",
+		zap.Int("users_found", len(usersInRing)),
+		zap.Int("ring", payload.CurrentRing),
+		zap.Int("hexes_count", len(hexStrings)),
+	)
 
 	for _, u := range usersInRing {
 		if usersLeftToSearch <= 0 {
@@ -198,20 +214,45 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		_, _ = s.notifService.Submit(ctx, domain.NotificationTypeDonationRequest, u.ID, title, content)
 
 		usersLeftToSearch--
-		log.Printf("Notified user %s for request %s, ring %d, users left to search %d, bags needed %d\n", u.ID, req.ID, payload.CurrentRing, usersLeftToSearch, req.BagCount)
+		reqLogger.Info("Notified eligible user", zap.String("notified_user_id", u.ID))
 	}
 
-	log.Printf("Processed wave search for request %s, ring %d, users left to search %d, bags needed %d\n", req.ID, payload.CurrentRing, usersLeftToSearch, req.BagCount)
 	if usersLeftToSearch <= 0 {
-		log.Printf("Request %s completed\n", req.ID)
+		reqLogger.Info("All users reached out to, waiting for responses")
 		return nil
 	}
-	// Schedule the next check (1 hour from now) to see if we need a new wave
+
+	nextRing := payload.CurrentRing + 1
+	runAt := time.Now().Add(s.config.JobQueueInterval)
+	nextRetryCount := payload.RetryCount
+
+	if nextRing > s.config.maxKRings {
+		// Exhausted search radius
+		if payload.RetryCount >= s.config.WaveSearchMaxRetries {
+			reqLogger.Warn("Exhausted all search rings and max retries. Marking request as failed.", zap.Int("max_retries", s.config.WaveSearchMaxRetries))
+			
+			// Fail the request
+			req.Status = domain.RequestStatusFailed
+			req.UpdatedAt = time.Now()
+			_ = s.reqRepo.UpdateRequest(ctx, req)
+			return nil
+		}
+
+		reqLogger.Info("Exhausted search radius. Delaying and restarting from Ring 1",
+			zap.Int("retry_count_next", payload.RetryCount+1),
+			zap.Int("max_retries", s.config.WaveSearchMaxRetries),
+		)
+		nextRing = 1
+		nextRetryCount = payload.RetryCount + 1
+		runAt = time.Now().Add(s.config.WaveSearchRetryDelay)
+	}
+
 	nextPayload := domain.WaveSearchPayload{
 		RequestID:         req.ID,
-		CurrentRing:       payload.CurrentRing + 1,
+		CurrentRing:       nextRing,
 		CenterHex:         payload.CenterHex,
 		UsersLeftToSearch: usersLeftToSearch,
+		RetryCount:        nextRetryCount,
 	}
 	nextPayloadBytes, _ := json.Marshal(nextPayload)
 	nextJob := &domain.Job{
@@ -219,7 +260,7 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		Type:      domain.JobTypeWaveSearch,
 		Payload:   string(nextPayloadBytes),
 		Status:    domain.JobStatusPending,
-		RunAt:     time.Now().Add(s.config.JobQueueInterval),
+		RunAt:     runAt,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

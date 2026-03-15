@@ -89,14 +89,13 @@ func (h *userHandler) UpdateLocation(w http.ResponseWriter, r *http.Request) {
 		UserID string  `json:"user_id"`
 		Lat    float64 `json:"lat"`
 		Lng    float64 `json:"lng"`
-		H3Hex  string  `json:"h3_hex"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := h.service.UpdateLocation(r.Context(), req.UserID, req.Lat, req.Lng, req.H3Hex); err != nil {
+	if err := h.service.UpdateLocation(r.Context(), req.UserID, req.Lat, req.Lng); err != nil {
 		http.Error(w, "Failed to update location", http.StatusInternalServerError)
 		return
 	}

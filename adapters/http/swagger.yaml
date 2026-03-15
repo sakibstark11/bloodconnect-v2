@@ -1,0 +1,368 @@
+openapi: 3.0.3
+info:
+  title: BloodConnect API
+  description: API documentation for the BloodConnect platform.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /users/signup:
+    post:
+      summary: Sign up a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, phone]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                phone:
+                  type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+
+  /users/login:
+    post:
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  token:
+                    type: string
+
+  /users/health:
+    put:
+      summary: Update user health details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, info_type, details]
+              properties:
+                user_id:
+                  type: string
+                info_type:
+                  type: string
+                  enum: [blood_type, weight, height, last_donation_date, last_vaccination_date, medical_condition]
+                details:
+                  type: string
+      responses:
+        '200':
+          description: OK
+
+  /users/location:
+    put:
+      summary: Update preferred donation location
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, lat, lng, h3_hex]
+              properties:
+                user_id:
+                  type: string
+                lat:
+                  type: number
+                lng:
+                  type: number
+                h3_hex:
+                  type: string
+      responses:
+        '200':
+          description: OK
+
+  /notifications:
+    post:
+      summary: Create and send a notification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, recipient, title, content]
+              properties:
+                type:
+                  type: string
+                  enum: [blood_donation_request, blood_donation_completion, blood_donation_request_acceptance]
+                recipient:
+                  type: string
+                  description: User ID
+                title:
+                  type: string
+                content:
+                  type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+
+  /notifications/{id}:
+    put:
+      summary: Update notification status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [Pending, Sent, Failed, Completed]
+      responses:
+        '200':
+          description: OK
+    delete:
+      summary: Delete notification
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+
+  /notifications/user/{userID}:
+    get:
+      summary: Get notifications for user
+      parameters:
+        - in: path
+          name: userID
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    ID:
+                      type: string
+                    Type:
+                      type: string
+                    Recipient:
+                      type: string
+                    Status:
+                      type: string
+                    Title:
+                      type: string
+                    Content:
+                      type: string
+
+  /requests:
+    post:
+      summary: Submit a new blood donation request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, location_hex, location_lat, location_lng, bag_count, required_by_date, blood_type, contact_phone, description, requester_info, location_name]
+              properties:
+                user_id:
+                  type: string
+                location_hex:
+                  type: string
+                location_lat:
+                  type: number
+                location_lng:
+                  type: number
+                bag_count:
+                  type: integer
+                required_by_date:
+                  type: string
+                  format: date-time
+                blood_type:
+                  type: string
+                contact_phone:
+                  type: string
+                description:
+                  type: string
+                requester_info:
+                  type: string
+                location_name:
+                  type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+
+  /requests/{id}/respond:
+    post:
+      summary: Respond to a blood donation request (Accept/Decline)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, action]
+              properties:
+                user_id:
+                  type: string
+                action:
+                  type: string
+                  enum: [Accepted, Declined, Donated]
+      responses:
+        '200':
+          description: Response recorded
+  /requests/{id}:
+      get:
+        summary: Get a blood donation request by ID
+        parameters:
+          - name: id
+            in: path
+            required: true
+            description: The unique identifier of the request
+            schema:
+              type: string
+        responses:
+          '200':
+            description: Successful response
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    user_id:
+                      type: string
+                    location_hex:
+                      type: string
+                    location_lat:
+                      type: number
+                    location_lng:
+                      type: number
+                    bag_count:
+                      type: integer
+                    required_by_date:
+                      type: string
+                      format: date-time
+                    blood_type:
+                      type: string
+                    contact_phone:
+                      type: string
+                    description:
+                      type: string
+                    requester_info:
+                      type: string
+                    location_name:
+                      type: string
+          '404':
+            description: Request not found
+
+  /requests/{id}/cancel:
+    post:
+      summary: Cancel a blood donation request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: string
+                  description: ID of the user who created the request
+      responses:
+        '200':
+          description: Request Cancelled

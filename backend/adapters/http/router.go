@@ -29,27 +29,24 @@ func SetupRouter(
 
 	// ── Public routes ──────────────────────────────────────────────────────
 	uh.RegisterPublicRoutes(mux)
-	rh.RegisterPublicRoutes(mux) // POST /requests, GET /requests, GET /requests/{id}
+	mux.HandleFunc("GET /requests", rh.List)
+	mux.HandleFunc("GET /requests/{id}", rh.Get)
 
-	// ── Protected routes (AuthMiddleware with JWT verification) ───────────
+	// ── Protected routes (AuthMiddleware) ──────────────────────────────────
 	auth := AuthMiddleware(config.JWTSecret)
 
-	// Users /me
-	meMux := http.NewServeMux()
-	uh.RegisterMeRoutes(meMux)
-	mux.Handle("/users/me", auth(http.StripPrefix("/users/me", meMux)))
-	mux.Handle("/users/me/", auth(http.StripPrefix("/users/me", meMux)))
+	// User Profile
+	mux.Handle("GET /users/me", auth(http.HandlerFunc(uh.GetMe)))
+	mux.Handle("PUT /users/me/health", auth(http.HandlerFunc(uh.UpdateHealth)))
+	mux.Handle("PUT /users/me/location", auth(http.HandlerFunc(uh.UpdateLocation)))
 
 	// Notifications
-	notifMux := http.NewServeMux()
-	nh.RegisterRoutes(notifMux)
-	mux.Handle("/notifications", auth(http.StripPrefix("/notifications", notifMux)))
-	mux.Handle("/notifications/", auth(http.StripPrefix("/notifications", notifMux)))
+	mux.Handle("GET /notifications", auth(http.HandlerFunc(nh.GetForMe)))
 
-	// Requests (Protected actions)
-	reqMux := http.NewServeMux()
-	rh.RegisterProtectedRoutes(reqMux)
-	mux.Handle("/requests/", auth(http.StripPrefix("/requests", reqMux)))
+	// Requests (Actions)
+	mux.Handle("POST /requests", auth(http.HandlerFunc(rh.Submit)))
+	mux.Handle("POST /requests/{id}/respond", auth(http.HandlerFunc(rh.Respond)))
+	mux.Handle("POST /requests/{id}/cancel", auth(http.HandlerFunc(rh.Cancel)))
 
 	return enableCORS(mux)
 }

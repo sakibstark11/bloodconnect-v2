@@ -22,13 +22,13 @@ func NewRequestHandler(service services.RequestService, config *application.AppC
 
 // RegisterPublicRoutes registers routes that don't require authentication
 func (h *RequestHandler) RegisterPublicRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /requests", h.Submit)
 	mux.HandleFunc("GET /requests", h.List)
 	mux.HandleFunc("GET /requests/{id}", h.Get)
 }
 
 // RegisterProtectedRoutes registers protected actions under /requests/
 func (h *RequestHandler) RegisterProtectedRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /", h.Submit)
 	mux.HandleFunc("POST /{id}/respond", h.Respond)
 	mux.HandleFunc("POST /{id}/cancel", h.Cancel)
 }

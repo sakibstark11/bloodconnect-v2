@@ -15,9 +15,10 @@ type RequestFilters struct {
 
 // UserRepository defines the interface for interacting with User data storage.
 type UserRepository interface {
-	CreateUser(ctx context.Context, user *domain.User) error
+	CreateUser(ctx context.Context, user *domain.User, hashedPassword string) error
 	GetUserByID(ctx context.Context, id string) (*domain.User, error)
 	GetUserByEmail(ctx context.Context, email string) (*domain.User, error)
+	GetUserAuthByEmail(ctx context.Context, email string) (*domain.UserAuth, error)
 	UpdateUserHealth(ctx context.Context, health *domain.UserHealth) error
 	GetUserHealth(ctx context.Context, userID string) ([]domain.UserHealth, error)
 	UpdateUserLocation(ctx context.Context, loc *domain.UserPreferredDonationLocation) error

@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: BloodConnect API
   description: API for managing blood donation requests and donor notifications.
-  version: 1.1.0
+  version: 1.2.0
 
 servers:
   - url: http://localhost:8080
@@ -54,7 +54,7 @@ paths:
       summary: Get current authenticated user
       tags: [Users]
       security:
-        - XUserID: []
+        - BearerAuth: []
       responses:
         '200':
           description: Current user profile
@@ -70,7 +70,7 @@ paths:
       summary: Update health information for the current user
       tags: [Users]
       security:
-        - XUserID: []
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -88,7 +88,7 @@ paths:
       summary: Update preferred donation location for the current user
       tags: [Users]
       security:
-        - XUserID: []
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -106,7 +106,7 @@ paths:
       summary: Get notifications for the current user
       tags: [Notifications]
       security:
-        - XUserID: []
+        - BearerAuth: []
       responses:
         '200':
           description: List of notifications
@@ -122,7 +122,7 @@ paths:
       summary: Respond to a donation request as the current user
       tags: [Requests]
       security:
-        - XUserID: []
+        - BearerAuth: []
       parameters:
         - name: id
           in: path
@@ -148,7 +148,7 @@ paths:
       summary: Cancel a donation request owned by the current user
       tags: [Requests]
       security:
-        - XUserID: []
+        - BearerAuth: []
       parameters:
         - name: id
           in: path
@@ -185,11 +185,6 @@ paths:
           schema:
             type: integer
             default: 1
-        - name: page_size
-          in: query
-          schema:
-            type: integer
-            default: 20
       responses:
         '200':
           description: Paginated list of requests
@@ -238,10 +233,10 @@ paths:
 
 components:
   securitySchemes:
-    XUserID:
-      type: apiKey
-      in: header
-      name: X-User-ID
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
 
   schemas:
     IDResponse:

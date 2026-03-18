@@ -21,7 +21,7 @@ func DefaultAppConfig() *AppConfig {
 		H3HexResolution:          8,
 		JobQueueInterval:         120 * time.Second,
 		WaveSearchMaxRetries:     3,
-		WaveSearchRetryDelay:     5 * time.Minute, // shortened for testing
+		WaveSearchRetryDelay:     5 * time.Minute,
 		JWTSecret:                "super-secret-key-change-me",
 		DefaultPageSize:          20,
 	}

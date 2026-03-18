@@ -6,7 +6,8 @@ import (
 	"bloodconnect/application/domain"
 )
 
-// User is the GORM model for domain.User
+// User is the complete GORM model for the "users" table, including the password.
+// This is used for database migrations and for initial user registration (Signup).
 type User struct {
 	ID        string `gorm:"primaryKey;size:64"`
 	Name      string
@@ -17,24 +18,61 @@ type User struct {
 	UpdatedAt time.Time
 }
 
-func (m *User) ToDomain() *domain.User {
+func (User) TableName() string {
+	return "users"
+}
+
+// Profile is a password-less GORM model for the "users" table.
+// It is used for profile retrieval and search, ensuring that security-sensitive data
+// (the hashed password) is physically absent from the mapping struct.
+type Profile struct {
+	ID        string `gorm:"primaryKey;size:64"`
+	Name      string
+	Email     string
+	Phone     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (Profile) TableName() string {
+	return "users"
+}
+
+// Auth is a security-specific GORM model for the "users" table.
+// It is used exclusively during the authentication phase to fetch only the hash.
+type Auth struct {
+	ID       string `gorm:"primaryKey;column:id"`
+	Password string `gorm:"column:password"`
+}
+
+func (Auth) TableName() string {
+	return "users"
+}
+
+func (m *Profile) ToDomain() *domain.User {
 	return &domain.User{
 		ID:        m.ID,
 		Name:      m.Name,
 		Email:     m.Email,
-		Password:  m.Password,
 		Phone:     m.Phone,
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 	}
 }
 
-func UserFromDomain(u *domain.User) *User {
+func (m *Auth) ToAuth() *domain.UserAuth {
+	return &domain.UserAuth{
+		UserID:   m.ID,
+		Password: m.Password,
+	}
+}
+
+func UserFromDomain(u *domain.User, hashedPassword string) *User {
 	return &User{
 		ID:        u.ID,
 		Name:      u.Name,
 		Email:     u.Email,
-		Password:  u.Password,
+		Password:  hashedPassword,
 		Phone:     u.Phone,
 		CreatedAt: u.CreatedAt,
 		UpdatedAt: u.UpdatedAt,

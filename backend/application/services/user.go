@@ -42,13 +42,12 @@ func (s *userService) Signup(ctx context.Context, name, email, password, phone s
 		ID:        id,
 		Name:      name,
 		Email:     email,
-		Password:  string(hashedPassword),
 		Phone:     phone,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
-	if err := s.repo.CreateUser(ctx, user); err != nil {
+	if err := s.repo.CreateUser(ctx, user, string(hashedPassword)); err != nil {
 		return "", err
 	}
 
@@ -56,16 +55,24 @@ func (s *userService) Signup(ctx context.Context, name, email, password, phone s
 }
 
 func (s *userService) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
-	user, err := s.repo.GetUserByEmail(ctx, email)
+	// 1. Fetch only security credentials
+	userAuth, err := s.repo.GetUserAuthByEmail(ctx, email)
 	if err != nil {
 		return "", nil, err
 	}
-	if user == nil {
+	if userAuth == nil {
 		return "", nil, errors.New("invalid credentials")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+	// 2. Verify password
+	if err := bcrypt.CompareHashAndPassword([]byte(userAuth.Password), []byte(password)); err != nil {
 		return "", nil, errors.New("invalid credentials")
+	}
+
+	// 3. Fetch public profile (no password)
+	user, err := s.repo.GetUserByID(ctx, userAuth.UserID)
+	if err != nil {
+		return "", nil, err
 	}
 
 	token, err := s.generateToken(user.ID)

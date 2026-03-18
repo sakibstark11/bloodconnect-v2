@@ -6,13 +6,18 @@ import (
 
 // User represents a registered donor or requester
 type User struct {
-	ID        string
-	Name      string
-	Email     string
-	Password  string // Hashed
-	Phone     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	Phone     string    `json:"phone"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// UserAuth represents security credentials for a user
+type UserAuth struct {
+	UserID   string
+	Password string // Hashed
 }
 
 // InfoType represents the type of health information

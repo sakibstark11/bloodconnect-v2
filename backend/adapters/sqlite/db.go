@@ -18,6 +18,7 @@ func SetupDatabase(dbPath string) (*gorm.DB, error) {
 		return nil, err
 	}
 
+	// Use models.User for AutoMigrate to ensure full schema (including Password column)
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.UserHealth{},

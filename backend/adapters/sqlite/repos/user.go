@@ -7,6 +7,7 @@ import (
 	"bloodconnect/adapters/sqlite/models"
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
+
 	"gorm.io/gorm"
 )
 
@@ -18,13 +19,19 @@ func NewUserRepository(db *gorm.DB) application.UserRepository {
 	return &userRepository{db: db}
 }
 
-func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) error {
-	return r.db.WithContext(ctx).Create(models.UserFromDomain(user)).Error
+func (r *userRepository) CreateUser(ctx context.Context, user *domain.User, hashedPassword string) error {
+	// Signup uses the full User model to store the hash
+	return r.db.WithContext(ctx).Create(models.UserFromDomain(user, hashedPassword)).Error
 }
 
 func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
-	var m models.User
-	res := r.db.WithContext(ctx).Where("id = ?", id).First(&m)
+	var m models.Profile
+	// Use the Profile model for zero-leakage fetching
+	res := r.db.WithContext(ctx).
+		Select("id", "name", "email", "phone", "created_at", "updated_at").
+		Where("id = ?", id).
+		First(&m)
+
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -35,8 +42,13 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 }
 
 func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
-	var m models.User
-	res := r.db.WithContext(ctx).Where("email = ?", email).First(&m)
+	var m models.Profile
+	// Use the Profile model for zero-leakage fetching
+	res := r.db.WithContext(ctx).
+		Select("id", "name", "email", "phone", "created_at", "updated_at").
+		Where("email = ?", email).
+		First(&m)
+
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -44,6 +56,23 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 		return nil, res.Error
 	}
 	return m.ToDomain(), nil
+}
+
+func (r *userRepository) GetUserAuthByEmail(ctx context.Context, email string) (*domain.UserAuth, error) {
+	var m models.Auth
+	// Select only credentials needed for auth
+	res := r.db.WithContext(ctx).
+		Select("id", "password").
+		Where("email = ?", email).
+		First(&m)
+
+	if res.Error != nil {
+		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, res.Error
+	}
+	return m.ToAuth(), nil
 }
 
 func (r *userRepository) UpdateUserHealth(ctx context.Context, health *domain.UserHealth) error {
@@ -98,8 +127,11 @@ func (r *userRepository) GetEligibleUsersInHexes(ctx context.Context, hexes []st
 		return []domain.User{}, nil
 	}
 
-	var ms []models.User
-	if err := r.db.WithContext(ctx).Where("id IN ?", eligibleUserIDs).Find(&ms).Error; err != nil {
+	var ms []models.Profile
+	if err := r.db.WithContext(ctx).
+		Select("id", "name", "email", "phone", "created_at", "updated_at").
+		Where("id IN ?", eligibleUserIDs).
+		Find(&ms).Error; err != nil {
 		return nil, err
 	}
 	users := make([]domain.User, len(ms))

@@ -42,9 +42,9 @@ func (s *userService) Signup(ctx context.Context, name, email, password, phone s
 		ID:        id,
 		Name:      name,
 		Email:     email,
-		Phone:     phone,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		Phone:     phone, // Assuming 'phone' was intended here, as 'lng' is not in Signup signature.
+		CreatedAt: domain.Now(),
+		UpdatedAt: domain.Now(),
 	}
 
 	if err := s.repo.CreateUser(ctx, user, string(hashedPassword)); err != nil {
@@ -110,8 +110,8 @@ func (s *userService) UpdateHealth(ctx context.Context, infoType domain.InfoType
 		UserID:    userID,
 		InfoType:  infoType,
 		Details:   details,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: domain.Now(),
+		UpdatedAt: domain.Now(),
 	}
 
 	return s.repo.UpdateUserHealth(ctx, health)
@@ -127,8 +127,8 @@ func (s *userService) UpdateLocation(ctx context.Context, lat, lng float64) erro
 		Lat:       lat,
 		Lng:       lng,
 		H3Hex:     cell.String(),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		CreatedAt: domain.Now(),
+		UpdatedAt: domain.Now(),
 	}
 
 	return s.repo.UpdateUserLocation(ctx, loc)

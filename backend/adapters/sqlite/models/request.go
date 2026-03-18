@@ -1,8 +1,6 @@
 package models
 
 import (
-	"time"
-
 	"bloodconnect/application/domain"
 )
 
@@ -14,15 +12,14 @@ type Request struct {
 	LocationLat    float64
 	LocationLng    float64
 	BagCount       int
-	RequiredByDate time.Time
+	RequiredByDate string `gorm:"size:25"`
 	BloodType      string `gorm:"size:10"`
-	ContactPhone   string
 	Description    string
 	RequesterInfo  string
 	LocationName   string
 	Status         string `gorm:"index;size:20"`
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	CreatedAt      string `gorm:"size:25"`
+	UpdatedAt      string `gorm:"size:25"`
 }
 
 func (m *Request) ToDomain() *domain.DonationRequest {
@@ -33,15 +30,14 @@ func (m *Request) ToDomain() *domain.DonationRequest {
 		LocationLat:    m.LocationLat,
 		LocationLng:    m.LocationLng,
 		BagCount:       m.BagCount,
-		RequiredByDate: m.RequiredByDate,
+		RequiredByDate: domain.ISOTimestamp(m.RequiredByDate),
 		BloodType:      domain.BloodType(m.BloodType),
-		ContactPhone:   m.ContactPhone,
 		Description:    m.Description,
 		RequesterInfo:  m.RequesterInfo,
 		LocationName:   m.LocationName,
 		Status:         domain.RequestStatus(m.Status),
-		CreatedAt:      m.CreatedAt,
-		UpdatedAt:      m.UpdatedAt,
+		CreatedAt:      domain.ISOTimestamp(m.CreatedAt),
+		UpdatedAt:      domain.ISOTimestamp(m.UpdatedAt),
 	}
 }
 
@@ -53,15 +49,14 @@ func RequestFromDomain(r *domain.DonationRequest) *Request {
 		LocationLat:    r.LocationLat,
 		LocationLng:    r.LocationLng,
 		BagCount:       r.BagCount,
-		RequiredByDate: r.RequiredByDate,
+		RequiredByDate: string(r.RequiredByDate),
 		BloodType:      string(r.BloodType),
-		ContactPhone:   r.ContactPhone,
 		Description:    r.Description,
 		RequesterInfo:  r.RequesterInfo,
 		LocationName:   r.LocationName,
 		Status:         string(r.Status),
-		CreatedAt:      r.CreatedAt,
-		UpdatedAt:      r.UpdatedAt,
+		CreatedAt:      string(r.CreatedAt),
+		UpdatedAt:      string(r.UpdatedAt),
 	}
 }
 
@@ -70,8 +65,8 @@ type RequestState struct {
 	RequestID    string `gorm:"primaryKey;size:64"`
 	ActionedByID string `gorm:"primaryKey;size:64"`
 	Action       string `gorm:"size:20"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	CreatedAt    string `gorm:"size:25"`
+	UpdatedAt    string `gorm:"size:25"`
 }
 
 func (m *RequestState) ToDomain() *domain.RequestState {
@@ -79,8 +74,8 @@ func (m *RequestState) ToDomain() *domain.RequestState {
 		RequestID:    m.RequestID,
 		ActionedByID: m.ActionedByID,
 		Action:       domain.ActionStatus(m.Action),
-		CreatedAt:    m.CreatedAt,
-		UpdatedAt:    m.UpdatedAt,
+		CreatedAt:    domain.ISOTimestamp(m.CreatedAt),
+		UpdatedAt:    domain.ISOTimestamp(m.UpdatedAt),
 	}
 }
 
@@ -89,7 +84,7 @@ func RequestStateFromDomain(s *domain.RequestState) *RequestState {
 		RequestID:    s.RequestID,
 		ActionedByID: s.ActionedByID,
 		Action:       string(s.Action),
-		CreatedAt:    s.CreatedAt,
-		UpdatedAt:    s.UpdatedAt,
+		CreatedAt:    string(s.CreatedAt),
+		UpdatedAt:    string(s.UpdatedAt),
 	}
 }

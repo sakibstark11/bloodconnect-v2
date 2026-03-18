@@ -1,17 +1,15 @@
 package domain
 
-import (
-	"time"
-)
+import ()
 
 // User represents a registered donor or requester
 type User struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	Phone     string    `json:"phone"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        string       `json:"id"`
+	Name      string       `json:"name"`
+	Email     string       `json:"email"`
+	Phone     string       `json:"phone"`
+	CreatedAt ISOTimestamp `json:"created_at"`
+	UpdatedAt ISOTimestamp `json:"updated_at"`
 }
 
 // UserAuth represents security credentials for a user
@@ -37,8 +35,8 @@ type UserHealth struct {
 	UserID    string
 	InfoType  InfoType
 	Details   string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt ISOTimestamp
+	UpdatedAt ISOTimestamp
 }
 
 // UserPreferredDonationLocation represents a user's location preference
@@ -47,6 +45,6 @@ type UserPreferredDonationLocation struct {
 	Lat       float64
 	Lng       float64
 	H3Hex     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt ISOTimestamp
+	UpdatedAt ISOTimestamp
 }

@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"time"
 
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
@@ -12,7 +11,7 @@ import (
 
 type NotificationService interface {
 	Submit(ctx context.Context, notifType domain.NotificationType, recipient, title, content string) (string, error)
-	GetForUser(ctx context.Context, userID string) ([]domain.Notification, error)
+	GetForUser(ctx context.Context, userID string, page, pageSize int) ([]domain.Notification, int, error)
 }
 
 type notificationService struct {
@@ -36,7 +35,7 @@ func (s *notificationService) Submit(ctx context.Context, notifType domain.Notif
 		Recipient: recipient,
 		Title:     title,
 		Content:   content,
-		CreatedAt: time.Now(),
+		CreatedAt: domain.Now(),
 	}
 
 	if err := s.repo.CreateNotification(ctx, notification); err != nil {
@@ -49,6 +48,6 @@ func (s *notificationService) Submit(ctx context.Context, notifType domain.Notif
 	return id, nil
 }
 
-func (s *notificationService) GetForUser(ctx context.Context, userID string) ([]domain.Notification, error) {
-	return s.repo.GetNotificationsForUser(ctx, userID)
+func (s *notificationService) GetForUser(ctx context.Context, userID string, page, pageSize int) ([]domain.Notification, int, error) {
+	return s.repo.GetNotificationsForUser(ctx, userID, page, pageSize)
 }

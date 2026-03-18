@@ -14,7 +14,7 @@ import (
 )
 
 type RequestService interface {
-	SubmitRequest(ctx context.Context, userID, bloodType, phone, desc, reqInfo, locName string, lat, lng float64, count int, requiredBy time.Time) (string, error)
+	SubmitRequest(ctx context.Context, userID, bloodType, desc, reqInfo, locName string, lat, lng float64, count int, requiredBy domain.ISOTimestamp) (string, error)
 	RespondToRequest(ctx context.Context, requestID string, action domain.ActionStatus) error
 	CancelRequest(ctx context.Context, requestID string) error
 	GetRequest(ctx context.Context, requestID string) (*domain.DonationRequest, error)
@@ -111,12 +111,12 @@ func (s *requestService) CancelRequest(ctx context.Context, requestID string) er
 	}
 
 	req.Status = domain.RequestStatusCancelled
-	req.UpdatedAt = time.Now()
+	req.UpdatedAt = domain.Now()
 
 	return s.repo.UpdateRequest(ctx, req)
 }
 
-func (s *requestService) SubmitRequest(ctx context.Context, userID, bloodType, phone, desc, reqInfo, locName string, lat, lng float64, count int, requiredBy time.Time) (string, error) {
+func (s *requestService) SubmitRequest(ctx context.Context, userID, bloodType, desc, reqInfo, locName string, lat, lng float64, count int, requiredBy domain.ISOTimestamp) (string, error) {
 	cell, _ := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, s.config.H3HexResolution)
 	hex := cell.String()
 	reqID := "request_" + ulid.Make().String()
@@ -131,25 +131,24 @@ func (s *requestService) SubmitRequest(ctx context.Context, userID, bloodType, p
 		BagCount:       count,
 		RequiredByDate: requiredBy,
 		BloodType:      domain.BloodType(bloodType),
-		ContactPhone:   phone,
 		Description:    desc,
 		RequesterInfo:  reqInfo,
 		LocationName:   locName,
 		Status:         domain.RequestStatusPending,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		CreatedAt:      domain.Now(),
+		UpdatedAt:      domain.Now(),
 	}
 
 	if err := s.repo.CreateRequest(ctx, req); err != nil {
 		return "", err
 	}
 
-	now := time.Now()
+	now := domain.Now()
 	runAt := now
-	daysUntilReq := requiredBy.Sub(now).Hours() / 24.0
+	daysUntilReq := requiredBy.ToTime().Sub(now.ToTime()).Hours() / 24.0
 
 	if daysUntilReq > float64(s.config.ProcessRequestWindowDays) {
-		runAt = requiredBy.Add(-time.Duration(s.config.ProcessRequestWindowDays) * 24 * time.Hour)
+		runAt = domain.ISOTimestamp(requiredBy.ToTime().Add(-time.Duration(s.config.ProcessRequestWindowDays) * 24 * time.Hour).Format("2006-01-02T15:04:05Z"))
 	}
 
 	payload := domain.WaveSearchPayload{
@@ -191,8 +190,8 @@ func (s *requestService) RespondToRequest(ctx context.Context, requestID string,
 		RequestID:    requestID,
 		ActionedByID: userID,
 		Action:       action,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		CreatedAt:    domain.Now(),
+		UpdatedAt:    domain.Now(),
 	}
 
 	if err := s.repo.SaveRequestState(ctx, state); err != nil {

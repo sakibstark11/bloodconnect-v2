@@ -8,6 +8,7 @@ import (
 
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
+
 	"github.com/oklog/ulid/v2"
 	"github.com/uber/h3-go/v4"
 	"go.uber.org/zap"
@@ -63,6 +64,7 @@ func (s *jobWorkerService) Start(ctx context.Context) {
 				s.logger.Info("Stopping background job worker...")
 				return
 			case <-ticker.C:
+				s.logger.Info("Processing next job...")
 				s.processNextJob(ctx)
 			}
 		}
@@ -160,7 +162,7 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 
 	actionedMap := make(map[string]bool)
 	for _, u := range actionedUsers {
-		if u.Action == domain.ActionStatusPending && u.UpdatedAt.Add(1*time.Hour).Before(time.Now()) {
+		if u.Action == domain.ActionStatusPending && u.UpdatedAt.ToTime().Add(1*time.Hour).Before(time.Now()) {
 			usersLeftToSearch++
 		}
 		actionedMap[u.ActionedByID] = true
@@ -192,8 +194,8 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 			RequestID:    req.ID,
 			ActionedByID: u.ID,
 			Action:       domain.ActionStatusPending,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			CreatedAt:    domain.Now(),
+			UpdatedAt:    domain.Now(),
 		}
 		_ = s.reqRepo.SaveRequestState(ctx, state)
 
@@ -218,8 +220,9 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		if payload.RetryCount >= s.config.WaveSearchMaxRetries {
 			reqLogger.Warn("Exhausted all search rings and max retries. Marking request as failed.", zap.Int("max_retries", s.config.WaveSearchMaxRetries))
 			req.Status = domain.RequestStatusFailed
-			req.UpdatedAt = time.Now()
+			req.UpdatedAt = domain.Now()
 			_ = s.reqRepo.UpdateRequest(ctx, req)
+			_ = s.queue.MarkStatus(ctx, job.ID, domain.JobStatusCompleted)
 			return nil
 		}
 
@@ -245,9 +248,9 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		Type:      domain.JobTypeWaveSearch,
 		Payload:   string(nextPayloadBytes),
 		Status:    domain.JobStatusPending,
-		RunAt:     runAt,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		RunAt:     domain.ISOTimestamp(runAt.Format("2006-01-02T15:04:05Z")),
+		CreatedAt: domain.Now(),
+		UpdatedAt: domain.Now(),
 	}
 
 	return s.queue.Enqueue(ctx, nextJob)

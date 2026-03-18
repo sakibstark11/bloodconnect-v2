@@ -3,26 +3,31 @@ package handlers
 import (
 	"net/http"
 
+	"bloodconnect/application"
 	"bloodconnect/application/domain"
 	"bloodconnect/application/services"
+	"strconv"
 )
 
 type NotificationHandler struct {
 	service services.NotificationService
+	config  *application.AppConfig
 }
 
-func NewNotificationHandler(service services.NotificationService) *NotificationHandler {
-	return &NotificationHandler{service: service}
+func NewNotificationHandler(service services.NotificationService, config *application.AppConfig) *NotificationHandler {
+	return &NotificationHandler{service: service, config: config}
 }
 
-// RegisterMeRoutes registers /users/me/notifications (requires InjectUserID middleware)
-func (h *NotificationHandler) RegisterMeRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /users/me/notifications", h.GetForMe)
+// RegisterRoutes registers /notifications routes (requires Auth)
+func (h *NotificationHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /", h.GetForMe)
 }
 
-// NotificationsResponse wraps a list of notifications
 type NotificationsResponse struct {
 	Notifications []domain.Notification `json:"notifications"`
+	Total         int                   `json:"total"`
+	Page          int                   `json:"page"`
+	PageSize      int                   `json:"page_size"`
 }
 
 func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +37,14 @@ func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	notifications, err := h.service.GetForUser(r.Context(), userID)
+	q := r.URL.Query()
+	page, _ := strconv.Atoi(q.Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize := h.config.NotificationPageSize
+
+	notifications, total, err := h.service.GetForUser(r.Context(), userID, page, pageSize)
 	if err != nil {
 		RespondJSONError(w, http.StatusInternalServerError, "Failed to fetch notifications", err.Error())
 		return
@@ -41,5 +53,10 @@ func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 	if notifications == nil {
 		notifications = []domain.Notification{}
 	}
-	RespondJSON(w, http.StatusOK, NotificationsResponse{Notifications: notifications})
+	RespondJSON(w, http.StatusOK, NotificationsResponse{
+		Notifications: notifications,
+		Total:         total,
+		Page:          page,
+		PageSize:      pageSize,
+	})
 }

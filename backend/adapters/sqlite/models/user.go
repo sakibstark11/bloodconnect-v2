@@ -1,8 +1,6 @@
 package models
 
 import (
-	"time"
-
 	"bloodconnect/application/domain"
 )
 
@@ -14,8 +12,8 @@ type User struct {
 	Email     string `gorm:"uniqueIndex"`
 	Password  string
 	Phone     string `gorm:"uniqueIndex"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt string `gorm:"size:25"`
+	UpdatedAt string `gorm:"size:25"`
 }
 
 func (User) TableName() string {
@@ -30,8 +28,8 @@ type Profile struct {
 	Name      string
 	Email     string
 	Phone     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt string `gorm:"size:25"`
+	UpdatedAt string `gorm:"size:25"`
 }
 
 func (Profile) TableName() string {
@@ -55,8 +53,8 @@ func (m *Profile) ToDomain() *domain.User {
 		Name:      m.Name,
 		Email:     m.Email,
 		Phone:     m.Phone,
-		CreatedAt: m.CreatedAt,
-		UpdatedAt: m.UpdatedAt,
+		CreatedAt: domain.ISOTimestamp(m.CreatedAt),
+		UpdatedAt: domain.ISOTimestamp(m.UpdatedAt),
 	}
 }
 
@@ -74,8 +72,8 @@ func UserFromDomain(u *domain.User, hashedPassword string) *User {
 		Email:     u.Email,
 		Password:  hashedPassword,
 		Phone:     u.Phone,
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
+		CreatedAt: string(u.CreatedAt),
+		UpdatedAt: string(u.UpdatedAt),
 	}
 }
 
@@ -84,8 +82,8 @@ type UserHealth struct {
 	UserID    string `gorm:"primaryKey;size:64"`
 	InfoType  string `gorm:"primaryKey;size:50"`
 	Details   string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt string `gorm:"size:25"`
+	UpdatedAt string `gorm:"size:25"`
 }
 
 func (m *UserHealth) ToDomain() domain.UserHealth {
@@ -93,8 +91,8 @@ func (m *UserHealth) ToDomain() domain.UserHealth {
 		UserID:    m.UserID,
 		InfoType:  domain.InfoType(m.InfoType),
 		Details:   m.Details,
-		CreatedAt: m.CreatedAt,
-		UpdatedAt: m.UpdatedAt,
+		CreatedAt: domain.ISOTimestamp(m.CreatedAt),
+		UpdatedAt: domain.ISOTimestamp(m.UpdatedAt),
 	}
 }
 
@@ -103,8 +101,8 @@ func UserHealthFromDomain(h *domain.UserHealth) UserHealth {
 		UserID:    h.UserID,
 		InfoType:  string(h.InfoType),
 		Details:   h.Details,
-		CreatedAt: h.CreatedAt,
-		UpdatedAt: h.UpdatedAt,
+		CreatedAt: string(h.CreatedAt),
+		UpdatedAt: string(h.UpdatedAt),
 	}
 }
 
@@ -114,8 +112,8 @@ type UserLocation struct {
 	Lat       float64
 	Lng       float64
 	H3Hex     string `gorm:"index;size:20"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	CreatedAt string `gorm:"size:25"`
+	UpdatedAt string `gorm:"size:25"`
 }
 
 func (m *UserLocation) ToDomain() *domain.UserPreferredDonationLocation {
@@ -124,8 +122,8 @@ func (m *UserLocation) ToDomain() *domain.UserPreferredDonationLocation {
 		Lat:       m.Lat,
 		Lng:       m.Lng,
 		H3Hex:     m.H3Hex,
-		CreatedAt: m.CreatedAt,
-		UpdatedAt: m.UpdatedAt,
+		CreatedAt: domain.ISOTimestamp(m.CreatedAt),
+		UpdatedAt: domain.ISOTimestamp(m.UpdatedAt),
 	}
 }
 
@@ -135,7 +133,7 @@ func UserLocationFromDomain(l *domain.UserPreferredDonationLocation) *UserLocati
 		Lat:       l.Lat,
 		Lng:       l.Lng,
 		H3Hex:     l.H3Hex,
-		CreatedAt: l.CreatedAt,
-		UpdatedAt: l.UpdatedAt,
+		CreatedAt: string(l.CreatedAt),
+		UpdatedAt: string(l.UpdatedAt),
 	}
 }

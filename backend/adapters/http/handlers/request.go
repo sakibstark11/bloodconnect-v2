@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
@@ -11,10 +13,11 @@ import (
 
 type RequestHandler struct {
 	service services.RequestService
+	config  *application.AppConfig
 }
 
-func NewRequestHandler(service services.RequestService) *RequestHandler {
-	return &RequestHandler{service: service}
+func NewRequestHandler(service services.RequestService, config *application.AppConfig) *RequestHandler {
+	return &RequestHandler{service: service, config: config}
 }
 
 // RegisterPublicRoutes registers routes that don't require authentication
@@ -24,32 +27,31 @@ func (h *RequestHandler) RegisterPublicRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /requests/{id}", h.Get)
 }
 
-// RegisterMeRoutes registers /users/me/requests/* routes
-func (h *RequestHandler) RegisterMeRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /users/me/requests/{id}/respond", h.Respond)
-	mux.HandleFunc("POST /users/me/requests/{id}/cancel", h.Cancel)
+// RegisterProtectedRoutes registers protected actions under /requests/
+func (h *RequestHandler) RegisterProtectedRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /{id}/respond", h.Respond)
+	mux.HandleFunc("POST /{id}/cancel", h.Cancel)
 }
 
 // SubmitRequestBody is the expected body for POST /requests
 type SubmitRequestBody struct {
-	UserID         string  `json:"user_id"          validate:"required"`
 	LocationLat    float64 `json:"location_lat"     validate:"required,latitude"`
 	LocationLng    float64 `json:"location_lng"     validate:"required,longitude"`
 	BagCount       int     `json:"bag_count"        validate:"required,min=1"`
 	RequiredByDate string  `json:"required_by_date" validate:"required"`
 	BloodType      string  `json:"blood_type"       validate:"required"`
-	ContactPhone   string  `json:"contact_phone"    validate:"required"`
 	Description    string  `json:"description"`
 	RequesterInfo  string  `json:"requester_info"`
 	LocationName   string  `json:"location_name"    validate:"required"`
 }
 
-// SubmitRequestResponse is the response body for POST /requests
-type SubmitRequestResponse struct {
-	ID string `json:"id"`
-}
-
 func (h *RequestHandler) Submit(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(domain.UserIDKey).(string)
+	if userID == "" {
+		RespondJSONError(w, http.StatusUnauthorized, "Unauthorized", nil)
+		return
+	}
+
 	var req SubmitRequestBody
 	if err := decodeJSONBody(r, &req); err != nil {
 		RespondJSONError(w, http.StatusBadRequest, "Invalid JSON payload", err.Error())
@@ -62,20 +64,27 @@ func (h *RequestHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	requiredBy, err := parseDateTime(req.RequiredByDate)
 	if err != nil {
-		RespondJSONError(w, http.StatusBadRequest, "Invalid required_by_date format (use RFC3339)", err.Error())
+		RespondJSONError(w, http.StatusBadRequest, "Invalid required_by_date format (expected ISO 8601)", err.Error()) // Modified error message
+		return
+	}
+
+	// Validate "n days ahead" requirement
+	minDate := time.Now().Add(time.Duration(h.config.ProcessRequestWindowDays) * 24 * time.Hour)
+	if requiredBy.Before(minDate) {
+		RespondJSONError(w, http.StatusBadRequest, fmt.Sprintf("required_by_date must be at least %d days in the future", h.config.ProcessRequestWindowDays), nil)
 		return
 	}
 
 	id, err := h.service.SubmitRequest(r.Context(),
-		req.UserID, req.BloodType, req.ContactPhone, req.Description,
+		userID, req.BloodType, req.Description,
 		req.RequesterInfo, req.LocationName, req.LocationLat, req.LocationLng,
-		req.BagCount, requiredBy)
+		req.BagCount, domain.ISOTimestamp(req.RequiredByDate)) // Modified to use req.RequiredByDate
 	if err != nil {
 		RespondJSONError(w, http.StatusInternalServerError, "Failed to submit request", err.Error())
 		return
 	}
 
-	RespondJSON(w, http.StatusCreated, SubmitRequestResponse{ID: id})
+	RespondJSON(w, http.StatusAccepted, map[string]string{"id": id}) // Modified status and response body
 }
 
 // ListRequestsResponse wraps a paginated list of requests

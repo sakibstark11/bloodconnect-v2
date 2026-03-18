@@ -172,18 +172,16 @@ func populateRequest(c *client, i int, session userSession) (string, error) {
 	lng := minLng + rand.Float64()*(maxLng-minLng)
 
 	payload := map[string]interface{}{
-		"user_id":          session.ID,
 		"location_lat":     lat,
 		"location_lng":     lng,
 		"bag_count":        rand.Intn(5) + 1,
-		"required_by_date": time.Now().AddDate(0, 0, 3).Format(time.RFC3339),
+		"required_by_date": time.Now().Add(time.Duration(rand.Intn(72)+240) * time.Hour).Format("2006-01-02T15:04:05.000Z"),
 		"blood_type":       bloodTypes[rand.Intn(len(bloodTypes))],
-		"contact_phone":    "+8801900000000",
 		"description":      fmt.Sprintf("Urgent request #%d", i),
 		"requester_info":   "Emergency Unit",
 		"location_name":    "City Hospital",
 	}
-	res, err := c.doRequest(http.MethodPost, "/requests", "", payload)
+	res, err := c.doRequest(http.MethodPost, "/requests", session.Token, payload)
 	if err != nil {
 		return "", err
 	}
@@ -191,7 +189,7 @@ func populateRequest(c *client, i int, session userSession) (string, error) {
 }
 
 func (c *client) respondToRequest(requestID string, session userSession, action string) {
-	path := fmt.Sprintf("/users/me/requests/%s/respond", requestID)
+	path := fmt.Sprintf("/requests/%s/respond", requestID)
 	payload := map[string]string{
 		"action": action,
 	}

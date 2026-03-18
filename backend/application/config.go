@@ -11,6 +11,7 @@ type AppConfig struct {
 	WaveSearchRetryDelay     time.Duration
 	JWTSecret                string
 	DefaultPageSize          int
+	NotificationPageSize     int
 }
 
 // DefaultAppConfig returns the default configuration for the application
@@ -24,5 +25,6 @@ func DefaultAppConfig() *AppConfig {
 		WaveSearchRetryDelay:     5 * time.Minute,
 		JWTSecret:                "super-secret-key-change-me",
 		DefaultPageSize:          20,
+		NotificationPageSize:     10,
 	}
 }

@@ -22,11 +22,11 @@ func (h *UserHandler) RegisterPublicRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /users/login", h.Login)
 }
 
-// RegisterMeRoutes registers /users/me/* routes (wrapped with InjectUserID at router level)
+// RegisterMeRoutes registers /users/me/* routes (requires StripPrefix /users/me)
 func (h *UserHandler) RegisterMeRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /users/me", h.GetMe)
-	mux.HandleFunc("PUT /users/me/health", h.UpdateHealth)
-	mux.HandleFunc("PUT /users/me/location", h.UpdateLocation)
+	mux.HandleFunc("GET /", h.GetMe)
+	mux.HandleFunc("PUT /health", h.UpdateHealth)
+	mux.HandleFunc("PUT /location", h.UpdateLocation)
 }
 
 // SignupRequest is the expected body for POST /users/signup

@@ -37,11 +37,9 @@ type RequestRepository interface {
 	GetActionedUsers(ctx context.Context, requestID string) ([]domain.RequestState, error)
 }
 
-// NotificationRepository defines the interface for interacting with Notification data storage.
-// Notifications are one-way — only creation and read by recipient are supported.
 type NotificationRepository interface {
 	CreateNotification(ctx context.Context, notification *domain.Notification) error
-	GetNotificationsForUser(ctx context.Context, userID string) ([]domain.Notification, error)
+	GetNotificationsForUser(ctx context.Context, userID string, page, pageSize int) ([]domain.Notification, int, error)
 }
 
 // NotificationSender defines the interface for dispatching notifications via an external channel.

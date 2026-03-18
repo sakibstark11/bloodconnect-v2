@@ -1,7 +1,5 @@
 package domain
 
-import "time"
-
 // JobStatus track the background processor status
 type JobStatus string
 
@@ -26,9 +24,9 @@ type Job struct {
 	Type      JobType
 	Payload   string // JSON structure containing RequestID, CurrentRing (K), etc.
 	Status    JobStatus
-	RunAt     time.Time // When it's allowed to run next
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	RunAt     ISOTimestamp // When it's allowed to run next
+	CreatedAt ISOTimestamp
+	UpdatedAt ISOTimestamp
 }
 
 // WaveSearchPayload represents the JSON payload stored in Job.Payload

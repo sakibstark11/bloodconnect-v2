@@ -1,7 +1,5 @@
 package domain
 
-import "time"
-
 type ContextKey string
 
 const (
@@ -41,15 +39,14 @@ type DonationRequest struct {
 	LocationLat    float64       `json:"location_lat"`
 	LocationLng    float64       `json:"location_lng"`
 	BagCount       int           `json:"bag_count"`
-	RequiredByDate time.Time     `json:"required_by_date"`
+	RequiredByDate ISOTimestamp  `json:"required_by_date"`
 	BloodType      BloodType     `json:"blood_type"`
-	ContactPhone   string        `json:"contact_phone"`
 	Description    string        `json:"description"`
 	RequesterInfo  string        `json:"requester_info"`
 	LocationName   string        `json:"location_name"`
 	Status         RequestStatus `json:"status"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
+	CreatedAt      ISOTimestamp  `json:"created_at"`
+	UpdatedAt      ISOTimestamp  `json:"updated_at"`
 }
 
 // RequestActionedUser represents an individual tracking response
@@ -82,6 +79,6 @@ type RequestState struct {
 	RequestID    string
 	ActionedByID string // UserID
 	Action       ActionStatus
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	CreatedAt    ISOTimestamp
+	UpdatedAt    ISOTimestamp
 }

@@ -1,20 +1,18 @@
 package models
 
 import (
-	"time"
-
 	"bloodconnect/application/domain"
 )
 
 // Job is the GORM model for domain.Job
 type Job struct {
-	ID        string    `gorm:"primaryKey;size:64"`
-	Type      string    `gorm:"index;size:50"`
-	Payload   string    `gorm:"type:text"`
-	Status    string    `gorm:"index;size:20"`
-	RunAt     time.Time `gorm:"index"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID        string `gorm:"primaryKey;size:64"`
+	Type      string `gorm:"index;size:50"`
+	Payload   string `gorm:"type:text"`
+	Status    string `gorm:"index;size:20"`
+	RunAt     string `gorm:"size:25"`
+	CreatedAt string `gorm:"size:25"`
+	UpdatedAt string `gorm:"size:25"`
 }
 
 func (m *Job) ToDomain() *domain.Job {
@@ -23,9 +21,9 @@ func (m *Job) ToDomain() *domain.Job {
 		Type:      domain.JobType(m.Type),
 		Payload:   m.Payload,
 		Status:    domain.JobStatus(m.Status),
-		RunAt:     m.RunAt,
-		CreatedAt: m.CreatedAt,
-		UpdatedAt: m.UpdatedAt,
+		RunAt:     domain.ISOTimestamp(m.RunAt),
+		CreatedAt: domain.ISOTimestamp(m.CreatedAt),
+		UpdatedAt: domain.ISOTimestamp(m.UpdatedAt),
 	}
 }
 
@@ -35,8 +33,8 @@ func JobFromDomain(j *domain.Job) *Job {
 		Type:      string(j.Type),
 		Payload:   j.Payload,
 		Status:    string(j.Status),
-		RunAt:     j.RunAt,
-		CreatedAt: j.CreatedAt,
-		UpdatedAt: j.UpdatedAt,
+		RunAt:     string(j.RunAt),
+		CreatedAt: string(j.CreatedAt),
+		UpdatedAt: string(j.UpdatedAt),
 	}
 }

@@ -101,12 +101,18 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /users/me/notifications:
+  /notifications:
     get:
-      summary: Get notifications for the current user
+      summary: Get notifications for the current user (Paginated)
       tags: [Notifications]
       security:
         - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
       responses:
         '200':
           description: List of notifications
@@ -117,7 +123,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /users/me/requests/{id}/respond:
+  /requests/{id}/respond:
     post:
       summary: Respond to a donation request as the current user
       tags: [Requests]
@@ -143,7 +149,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /users/me/requests/{id}/cancel:
+  /requests/{id}/cancel:
     post:
       summary: Cancel a donation request owned by the current user
       tags: [Requests]
@@ -300,15 +306,13 @@ components:
 
     CreateRequestRequest:
       type: object
-      required: [user_id, location_lat, location_lng, bag_count, required_by_date, blood_type, contact_phone, location_name]
+      required: [location_lat, location_lng, bag_count, required_by_date, blood_type, location_name]
       properties:
-        user_id: { type: string }
         location_lat: { type: number }
         location_lng: { type: number }
         bag_count: { type: integer }
         required_by_date: { type: string, format: date-time }
         blood_type: { type: string }
-        contact_phone: { type: string }
         description: { type: string }
         requester_info: { type: string }
         location_name: { type: string }
@@ -379,6 +383,9 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Notification'
+        total: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
 
   responses:
     BadRequest:

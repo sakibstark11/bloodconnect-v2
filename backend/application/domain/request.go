@@ -35,21 +35,21 @@ const (
 
 // DonationRequest represents a user asking for a blood donation
 type DonationRequest struct {
-	ID             string
-	UserID         string
-	LocationHex    string
-	LocationLat    float64
-	LocationLng    float64
-	BagCount       int
-	RequiredByDate time.Time
-	BloodType      BloodType
-	ContactPhone   string
-	Description    string
-	RequesterInfo  string
-	LocationName   string
-	Status         RequestStatus
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID             string        `json:"id"`
+	UserID         string        `json:"user_id"`
+	LocationHex    string        `json:"location_hex"`
+	LocationLat    float64       `json:"location_lat"`
+	LocationLng    float64       `json:"location_lng"`
+	BagCount       int           `json:"bag_count"`
+	RequiredByDate time.Time     `json:"required_by_date"`
+	BloodType      BloodType     `json:"blood_type"`
+	ContactPhone   string        `json:"contact_phone"`
+	Description    string        `json:"description"`
+	RequesterInfo  string        `json:"requester_info"`
+	LocationName   string        `json:"location_name"`
+	Status         RequestStatus `json:"status"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
 }
 
 // RequestActionedUser represents an individual tracking response

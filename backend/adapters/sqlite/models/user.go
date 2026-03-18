@@ -1,13 +1,13 @@
-package sqlite
+package models
 
 import (
 	"time"
 
-	"github.com/sakibalam/bloodconnect/domain"
+	"bloodconnect/application/domain"
 )
 
-// userModel is the SQLite representation of domain.User
-type userModel struct {
+// User is the GORM model for domain.User
+type User struct {
 	ID        string `gorm:"primaryKey;size:64"`
 	Name      string
 	Email     string `gorm:"uniqueIndex"`
@@ -17,7 +17,7 @@ type userModel struct {
 	UpdatedAt time.Time
 }
 
-func (m *userModel) toDomain() *domain.User {
+func (m *User) ToDomain() *domain.User {
 	return &domain.User{
 		ID:        m.ID,
 		Name:      m.Name,
@@ -29,8 +29,8 @@ func (m *userModel) toDomain() *domain.User {
 	}
 }
 
-func fromDomainUser(u *domain.User) *userModel {
-	return &userModel{
+func UserFromDomain(u *domain.User) *User {
+	return &User{
 		ID:        u.ID,
 		Name:      u.Name,
 		Email:     u.Email,
@@ -41,8 +41,8 @@ func fromDomainUser(u *domain.User) *userModel {
 	}
 }
 
-// userHealthModel is the SQLite representation of domain.UserHealth
-type userHealthModel struct {
+// UserHealth is the GORM model for domain.UserHealth
+type UserHealth struct {
 	UserID    string `gorm:"primaryKey;size:64"`
 	InfoType  string `gorm:"primaryKey;size:50"`
 	Details   string
@@ -50,7 +50,7 @@ type userHealthModel struct {
 	UpdatedAt time.Time
 }
 
-func (m *userHealthModel) toDomain() domain.UserHealth {
+func (m *UserHealth) ToDomain() domain.UserHealth {
 	return domain.UserHealth{
 		UserID:    m.UserID,
 		InfoType:  domain.InfoType(m.InfoType),
@@ -60,8 +60,8 @@ func (m *userHealthModel) toDomain() domain.UserHealth {
 	}
 }
 
-func fromDomainUserHealth(h *domain.UserHealth) userHealthModel {
-	return userHealthModel{
+func UserHealthFromDomain(h *domain.UserHealth) UserHealth {
+	return UserHealth{
 		UserID:    h.UserID,
 		InfoType:  string(h.InfoType),
 		Details:   h.Details,
@@ -70,8 +70,8 @@ func fromDomainUserHealth(h *domain.UserHealth) userHealthModel {
 	}
 }
 
-// userLocationModel is the SQLite representation of domain.UserPreferredDonationLocation
-type userLocationModel struct {
+// UserLocation is the GORM model for domain.UserPreferredDonationLocation
+type UserLocation struct {
 	UserID    string `gorm:"primaryKey;size:64"`
 	Lat       float64
 	Lng       float64
@@ -80,7 +80,7 @@ type userLocationModel struct {
 	UpdatedAt time.Time
 }
 
-func (m *userLocationModel) toDomain() *domain.UserPreferredDonationLocation {
+func (m *UserLocation) ToDomain() *domain.UserPreferredDonationLocation {
 	return &domain.UserPreferredDonationLocation{
 		UserID:    m.UserID,
 		Lat:       m.Lat,
@@ -91,8 +91,8 @@ func (m *userLocationModel) toDomain() *domain.UserPreferredDonationLocation {
 	}
 }
 
-func fromDomainUserLocation(l *domain.UserPreferredDonationLocation) *userLocationModel {
-	return &userLocationModel{
+func UserLocationFromDomain(l *domain.UserPreferredDonationLocation) *UserLocation {
+	return &UserLocation{
 		UserID:    l.UserID,
 		Lat:       l.Lat,
 		Lng:       l.Lng,

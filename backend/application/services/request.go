@@ -1,4 +1,4 @@
-package application
+package services
 
 import (
 	"context"
@@ -6,31 +6,32 @@ import (
 	"errors"
 	"time"
 
+	"bloodconnect/application"
+	"bloodconnect/application/domain"
 	"github.com/oklog/ulid/v2"
-	"github.com/sakibalam/bloodconnect/domain"
-	"github.com/sakibalam/bloodconnect/ports"
 	"github.com/uber/h3-go/v4"
 	"go.uber.org/zap"
 )
 
 type RequestService interface {
 	SubmitRequest(ctx context.Context, userID, bloodType, phone, desc, reqInfo, locName string, lat, lng float64, count int, requiredBy time.Time) (string, error)
-	RespondToRequest(ctx context.Context, requestID, userID string, action domain.ActionStatus) error
-	CancelRequest(ctx context.Context, requestID, userID string) error
+	RespondToRequest(ctx context.Context, requestID string, action domain.ActionStatus) error
+	CancelRequest(ctx context.Context, requestID string) error
 	GetRequest(ctx context.Context, requestID string) (*domain.DonationRequest, error)
 	GetExtendedRequest(ctx context.Context, requestID string) (*domain.ExtendedDonationRequest, error)
+	ListRequests(ctx context.Context, filters application.RequestFilters, page, pageSize int) ([]domain.DonationRequest, int, error)
 }
 
 type requestService struct {
-	repo         ports.RequestRepository
-	userRepo     ports.UserRepository
-	queue        ports.JobQueue
+	repo         application.RequestRepository
+	userRepo     application.UserRepository
+	queue        application.JobQueue
 	notifService NotificationService
-	config       *AppConfig
+	config       *application.AppConfig
 	logger       *zap.Logger
 }
 
-func NewRequestService(repo ports.RequestRepository, userRepo ports.UserRepository, queue ports.JobQueue, notifService NotificationService, config *AppConfig, logger *zap.Logger) RequestService {
+func NewRequestService(repo application.RequestRepository, userRepo application.UserRepository, queue application.JobQueue, notifService NotificationService, config *application.AppConfig, logger *zap.Logger) RequestService {
 	return &requestService{
 		repo:         repo,
 		userRepo:     userRepo,
@@ -51,6 +52,10 @@ func (s *requestService) getReqLogger(ctx context.Context, requestID string) *za
 		l = l.With(zap.String("request_id", requestID))
 	}
 	return l
+}
+
+func (s *requestService) ListRequests(ctx context.Context, filters application.RequestFilters, page, pageSize int) ([]domain.DonationRequest, int, error) {
+	return s.repo.ListRequests(ctx, filters, page, pageSize)
 }
 
 func (s *requestService) GetRequest(ctx context.Context, requestID string) (*domain.DonationRequest, error) {
@@ -75,7 +80,7 @@ func (s *requestService) GetExtendedRequest(ctx context.Context, requestID strin
 	for _, state := range actionedStates {
 		loc, err := s.userRepo.GetUserLocation(ctx, state.ActionedByID)
 		if err != nil || loc == nil {
-			continue // Skip if user location is somehow missing
+			continue
 		}
 		notifiedUsers = append(notifiedUsers, domain.RequestActionedUser{
 			UserID: state.ActionedByID,
@@ -92,13 +97,15 @@ func (s *requestService) GetExtendedRequest(ctx context.Context, requestID strin
 	}, nil
 }
 
-func (s *requestService) CancelRequest(ctx context.Context, requestID, userID string) error {
+// CancelRequest cancels a request. The requesting user is read from context (must own the request).
+func (s *requestService) CancelRequest(ctx context.Context, requestID string) error {
+	userID, _ := ctx.Value(domain.UserIDKey).(string)
+
 	req, err := s.repo.GetRequestByID(ctx, requestID)
 	if err != nil {
 		return err
 	}
 
-	// Ensure the user trying to cancel is the requester
 	if req.UserID != userID {
 		return errors.New("unauthorized to cancel this request")
 	}
@@ -114,7 +121,7 @@ func (s *requestService) SubmitRequest(ctx context.Context, userID, bloodType, p
 	hex := cell.String()
 	reqID := "request_" + ulid.Make().String()
 	reqLogger := s.getReqLogger(ctx, reqID)
-	
+
 	req := &domain.DonationRequest{
 		ID:             reqID,
 		UserID:         userID,
@@ -137,17 +144,14 @@ func (s *requestService) SubmitRequest(ctx context.Context, userID, bloodType, p
 		return "", err
 	}
 
-	// Calculate job run time
 	now := time.Now()
 	runAt := now
 	daysUntilReq := requiredBy.Sub(now).Hours() / 24.0
 
 	if daysUntilReq > float64(s.config.ProcessRequestWindowDays) {
-		// Delay until exactly N days before requirement
 		runAt = requiredBy.Add(-time.Duration(s.config.ProcessRequestWindowDays) * 24 * time.Hour)
 	}
 
-	// Enqueue search wave job
 	payload := domain.WaveSearchPayload{
 		RequestID:         reqID,
 		CurrentRing:       1,
@@ -178,8 +182,11 @@ func (s *requestService) SubmitRequest(ctx context.Context, userID, bloodType, p
 	return reqID, nil
 }
 
-func (s *requestService) RespondToRequest(ctx context.Context, requestID, userID string, action domain.ActionStatus) error {
+// RespondToRequest records a donor's response. The actioning user is read from context.
+func (s *requestService) RespondToRequest(ctx context.Context, requestID string, action domain.ActionStatus) error {
+	userID, _ := ctx.Value(domain.UserIDKey).(string)
 	reqLogger := s.getReqLogger(ctx, requestID)
+
 	state := &domain.RequestState{
 		RequestID:    requestID,
 		ActionedByID: userID,
@@ -197,7 +204,6 @@ func (s *requestService) RespondToRequest(ctx context.Context, requestID, userID
 		reqLogger.Info("User accepted donation request", zap.String("actioned_user_id", userID))
 		req, err := s.repo.GetRequestByID(ctx, requestID)
 		if err == nil && req != nil {
-			// Notify the original requester
 			title := "Donation Request Accepted"
 			content := "A user has accepted your request to donate blood."
 			_, _ = s.notifService.Submit(ctx, domain.NotificationTypeDonationRequestAcceptance, req.UserID, title, content)

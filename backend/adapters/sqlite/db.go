@@ -3,6 +3,7 @@ package sqlite
 import (
 	"log"
 
+	"bloodconnect/adapters/sqlite/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -17,21 +18,19 @@ func SetupDatabase(dbPath string) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	// Run Migrations
 	err = db.AutoMigrate(
-		&userModel{},
-		&userHealthModel{},
-		&userLocationModel{},
-		&notificationModel{},
-		&requestModel{},
-		&requestStateModel{},
-		&jobModel{},
+		&models.User{},
+		&models.UserHealth{},
+		&models.UserLocation{},
+		&models.Notification{},
+		&models.Request{},
+		&models.RequestState{},
+		&models.Job{},
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Println("Database connection established")
-
 	return db, nil
 }

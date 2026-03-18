@@ -1,46 +1,41 @@
-package sqlite
+package repos
 
 import (
 	"context"
 	"errors"
 
+	"bloodconnect/adapters/sqlite/models"
+	"bloodconnect/application"
+	"bloodconnect/application/domain"
 	"gorm.io/gorm"
-
-	"github.com/sakibalam/bloodconnect/domain"
-	"github.com/sakibalam/bloodconnect/ports"
 )
 
 type userRepository struct {
 	db *gorm.DB
 }
 
-// NewUserRepository creates a new SQLite user repository
-func NewUserRepository(db *gorm.DB) ports.UserRepository {
-	return &userRepository{
-		db: db,
-	}
+func NewUserRepository(db *gorm.DB) application.UserRepository {
+	return &userRepository{db: db}
 }
 
 func (r *userRepository) CreateUser(ctx context.Context, user *domain.User) error {
-	m := fromDomainUser(user)
-	res := r.db.WithContext(ctx).Create(m)
-	return res.Error
+	return r.db.WithContext(ctx).Create(models.UserFromDomain(user)).Error
 }
 
 func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
-	var m userModel
+	var m models.User
 	res := r.db.WithContext(ctx).Where("id = ?", id).First(&m)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-			return nil, nil // Or a specific domain error
+			return nil, nil
 		}
 		return nil, res.Error
 	}
-	return m.toDomain(), nil
+	return m.ToDomain(), nil
 }
 
 func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
-	var m userModel
+	var m models.User
 	res := r.db.WithContext(ctx).Where("email = ?", email).First(&m)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
@@ -48,39 +43,32 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 		}
 		return nil, res.Error
 	}
-	return m.toDomain(), nil
+	return m.ToDomain(), nil
 }
 
 func (r *userRepository) UpdateUserHealth(ctx context.Context, health *domain.UserHealth) error {
-	m := fromDomainUserHealth(health)
-	// Use Save to Insert or Update based on Primary Keys (UserID + InfoType)
-	res := r.db.WithContext(ctx).Save(&m)
-	return res.Error
+	m := models.UserHealthFromDomain(health)
+	return r.db.WithContext(ctx).Save(&m).Error
 }
 
 func (r *userRepository) GetUserHealth(ctx context.Context, userID string) ([]domain.UserHealth, error) {
-	var models []userHealthModel
-	res := r.db.WithContext(ctx).Where("user_id = ?", userID).Find(&models)
-	if res.Error != nil {
-		return nil, res.Error
+	var ms []models.UserHealth
+	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).Find(&ms).Error; err != nil {
+		return nil, err
 	}
-
-	var d []domain.UserHealth
-	for _, m := range models {
-		d = append(d, m.toDomain())
+	result := make([]domain.UserHealth, len(ms))
+	for i, m := range ms {
+		result[i] = m.ToDomain()
 	}
-	return d, nil
+	return result, nil
 }
 
 func (r *userRepository) UpdateUserLocation(ctx context.Context, loc *domain.UserPreferredDonationLocation) error {
-	m := fromDomainUserLocation(loc)
-	// We only expect one location per user, Save on PK
-	res := r.db.WithContext(ctx).Save(m)
-	return res.Error
+	return r.db.WithContext(ctx).Save(models.UserLocationFromDomain(loc)).Error
 }
 
 func (r *userRepository) GetUserLocation(ctx context.Context, userID string) (*domain.UserPreferredDonationLocation, error) {
-	var m userLocationModel
+	var m models.UserLocation
 	res := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&m)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
@@ -88,44 +76,35 @@ func (r *userRepository) GetUserLocation(ctx context.Context, userID string) (*d
 		}
 		return nil, res.Error
 	}
-	return m.toDomain(), nil
+	return m.ToDomain(), nil
 }
 
 func (r *userRepository) GetEligibleUsersInHexes(ctx context.Context, hexes []string, bloodType string, count int) ([]domain.User, error) {
-	// 1. Find UserIDs in Location table where H3Hex is in `hexes`
 	var userIDs []string
-	res := r.db.WithContext(ctx).Model(&userLocationModel{}).Where("h3_hex IN ?", hexes).Limit(count).Pluck("user_id", &userIDs)
-	if res.Error != nil {
-		return nil, res.Error
+	if err := r.db.WithContext(ctx).Model(&models.UserLocation{}).Where("h3_hex IN ?", hexes).Limit(count).Pluck("user_id", &userIDs).Error; err != nil {
+		return nil, err
 	}
-
 	if len(userIDs) == 0 {
 		return []domain.User{}, nil
 	}
 
-	// 2. Filter these UserIDs by those who have matching BloodType in UserHealth
 	var eligibleUserIDs []string
-	res = r.db.WithContext(ctx).Model(&userHealthModel{}).
+	if err := r.db.WithContext(ctx).Model(&models.UserHealth{}).
 		Where("user_id IN ? AND info_type = ? AND details = ?", userIDs, string(domain.InfoTypeBloodType), bloodType).
-		Pluck("user_id", &eligibleUserIDs)
-	if res.Error != nil {
-		return nil, res.Error
+		Pluck("user_id", &eligibleUserIDs).Error; err != nil {
+		return nil, err
 	}
-
 	if len(eligibleUserIDs) == 0 {
 		return []domain.User{}, nil
 	}
 
-	// 3. Fetch the actual user models
-	var models []userModel
-	res = r.db.WithContext(ctx).Where("id IN ?", eligibleUserIDs).Find(&models)
-	if res.Error != nil {
-		return nil, res.Error
+	var ms []models.User
+	if err := r.db.WithContext(ctx).Where("id IN ?", eligibleUserIDs).Find(&ms).Error; err != nil {
+		return nil, err
 	}
-
-	var users []domain.User
-	for _, m := range models {
-		users = append(users, *m.toDomain())
+	users := make([]domain.User, len(ms))
+	for i, m := range ms {
+		users[i] = *m.ToDomain()
 	}
 	return users, nil
 }

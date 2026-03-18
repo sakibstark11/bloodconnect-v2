@@ -4,14 +4,14 @@ import (
 	"context"
 	"log"
 
-	"github.com/sakibalam/bloodconnect/domain"
-	"github.com/sakibalam/bloodconnect/ports"
+	"bloodconnect/application"
+	"bloodconnect/application/domain"
 )
 
 type dummyNotificationSender struct{}
 
 // NewNotificationSender creates a dummy sender that just logs to stdout.
-func NewNotificationSender() ports.NotificationSender {
+func NewNotificationSender() application.NotificationSender {
 	return &dummyNotificationSender{}
 }
 

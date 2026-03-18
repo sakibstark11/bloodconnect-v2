@@ -19,12 +19,12 @@ type User struct {
 type InfoType string
 
 const (
-	InfoTypeBloodType      InfoType = "blood_type"
-	InfoTypeWeight         InfoType = "weight"
-	InfoTypeHeight         InfoType = "height"
-	InfoTypeLastDonation   InfoType = "last_donation_date"
-	InfoTypeLastVaccine    InfoType = "last_vaccination_date"
-	InfoTypeMedicalCond    InfoType = "medical_condition"
+	InfoTypeBloodType    InfoType = "blood_type"
+	InfoTypeWeight       InfoType = "weight"
+	InfoTypeHeight       InfoType = "height"
+	InfoTypeLastDonation InfoType = "last_donation_date"
+	InfoTypeLastVaccine  InfoType = "last_vaccination_date"
+	InfoTypeMedicalCond  InfoType = "medical_condition"
 )
 
 // UserHealth represents specific health details for a user

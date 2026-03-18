@@ -6,6 +6,7 @@ type ContextKey string
 
 const (
 	TraceIDKey ContextKey = "trace_id"
+	UserIDKey  ContextKey = "user_id"
 )
 
 // RequestStatus represents the state of the overall donation request
@@ -62,8 +63,8 @@ type RequestActionedUser struct {
 
 // ExtendedDonationRequest provides the request details alongside the locations of all people notified
 type ExtendedDonationRequest struct {
-	Request       *DonationRequest       `json:"request"`
-	NotifiedUsers []RequestActionedUser  `json:"notified_users"`
+	Request       *DonationRequest      `json:"request"`
+	NotifiedUsers []RequestActionedUser `json:"notified_users"`
 }
 
 // ActionStatus represents the individual donor's response to a request

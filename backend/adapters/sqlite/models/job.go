@@ -1,22 +1,23 @@
-package sqlite
+package models
 
 import (
 	"time"
 
-	"github.com/sakibalam/bloodconnect/domain"
+	"bloodconnect/application/domain"
 )
 
-type jobModel struct {
-	ID        string `gorm:"primaryKey;size:64"`
-	Type      string `gorm:"index;size:50"`
-	Payload   string `gorm:"type:text"`
-	Status    string `gorm:"index;size:20"`
+// Job is the GORM model for domain.Job
+type Job struct {
+	ID        string    `gorm:"primaryKey;size:64"`
+	Type      string    `gorm:"index;size:50"`
+	Payload   string    `gorm:"type:text"`
+	Status    string    `gorm:"index;size:20"`
 	RunAt     time.Time `gorm:"index"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
-func (m *jobModel) toDomain() *domain.Job {
+func (m *Job) ToDomain() *domain.Job {
 	return &domain.Job{
 		ID:        m.ID,
 		Type:      domain.JobType(m.Type),
@@ -28,8 +29,8 @@ func (m *jobModel) toDomain() *domain.Job {
 	}
 }
 
-func fromDomainJob(j *domain.Job) *jobModel {
-	return &jobModel{
+func JobFromDomain(j *domain.Job) *Job {
+	return &Job{
 		ID:        j.ID,
 		Type:      string(j.Type),
 		Payload:   j.Payload,

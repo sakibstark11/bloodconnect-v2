@@ -1,4 +1,4 @@
-package application
+package services
 
 import (
 	"context"
@@ -6,9 +6,9 @@ import (
 	"math"
 	"time"
 
+	"bloodconnect/application"
+	"bloodconnect/application/domain"
 	"github.com/oklog/ulid/v2"
-	"github.com/sakibalam/bloodconnect/domain"
-	"github.com/sakibalam/bloodconnect/ports"
 	"github.com/uber/h3-go/v4"
 	"go.uber.org/zap"
 )
@@ -18,20 +18,20 @@ type JobWorkerService interface {
 }
 
 type jobWorkerServiceConfig struct {
-	*AppConfig
+	*application.AppConfig
 	maxKRings int
 }
 
 type jobWorkerService struct {
-	queue        ports.JobQueue
-	reqRepo      ports.RequestRepository
-	userRepo     ports.UserRepository
+	queue        application.JobQueue
+	reqRepo      application.RequestRepository
+	userRepo     application.UserRepository
 	notifService NotificationService
 	config       *jobWorkerServiceConfig
 	logger       *zap.Logger
 }
 
-func NewJobWorkerService(queue ports.JobQueue, reqRepo ports.RequestRepository, userRepo ports.UserRepository, notifService NotificationService, config *AppConfig, logger *zap.Logger) (JobWorkerService, error) {
+func NewJobWorkerService(queue application.JobQueue, reqRepo application.RequestRepository, userRepo application.UserRepository, notifService NotificationService, config *application.AppConfig, logger *zap.Logger) (JobWorkerService, error) {
 	edgeLen, err := h3.HexagonEdgeLengthAvgKm(config.H3HexResolution)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,6 @@ func NewJobWorkerService(queue ports.JobQueue, reqRepo ports.RequestRepository, 
 
 	internalConfig := &jobWorkerServiceConfig{
 		AppConfig: config,
-		// Maximum possible K we are willing to search
 		maxKRings: int(math.Ceil(config.SearchRadiusKm / (edgeLen * 1.5))),
 	}
 	return &jobWorkerService{
@@ -77,12 +76,11 @@ func (s *jobWorkerService) processNextJob(ctx context.Context) {
 		return
 	}
 	if job == nil {
-		return // No jobs ready
+		return
 	}
 
 	jobLogger := s.logger.With(zap.String("job_id", job.ID), zap.String("job_type", string(job.Type)))
 
-	// Mark as processing
 	if err := s.queue.MarkStatus(ctx, job.ID, domain.JobStatusProcessing); err != nil {
 		jobLogger.Error("Error marking job as processing", zap.Error(err))
 		return
@@ -113,16 +111,13 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		return err
 	}
 
-	// Get the request to see if it's still pending
 	req, err := s.reqRepo.GetRequestByID(ctx, payload.RequestID)
 	if err != nil {
 		return err
 	}
-	// Append request_id context now that we've decoded it
 	reqLogger := jobLogger.With(zap.String("request_id", req.ID))
 
 	if req.Status != domain.RequestStatusPending {
-		// Stop processing if request was fulfilled or cancelled
 		reqLogger.Info("Request is not pending, skipping job", zap.String("status", string(req.Status)))
 		return nil
 	}
@@ -140,7 +135,6 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 
 	ringHexes, err = h3.GridRing(centerCell, payload.CurrentRing)
 	if err != nil {
-		// fallback for pentagons like the example code
 		allRings, diskErr := h3.GridDiskDistances(centerCell, payload.CurrentRing)
 		if diskErr != nil {
 			return diskErr
@@ -151,13 +145,11 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 	if payload.CurrentRing == 1 {
 		ringHexes = append(ringHexes, centerCell)
 	}
-	// Convert ring hexes to strings
+
 	hexStrings := make([]string, len(ringHexes))
 	for i, h := range ringHexes {
 		hexStrings[i] = h.String()
 	}
-
-	// Find actioned users so we don't ping them again
 
 	actionedUsers, err := s.reqRepo.GetActionedUsers(ctx, payload.RequestID)
 	if err != nil {
@@ -168,14 +160,12 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 
 	actionedMap := make(map[string]bool)
 	for _, u := range actionedUsers {
-		// If actioned users have been pending for > 1 hour, treat them as declined
 		if u.Action == domain.ActionStatusPending && u.UpdatedAt.Add(1*time.Hour).Before(time.Now()) {
 			usersLeftToSearch++
 		}
 		actionedMap[u.ActionedByID] = true
 	}
 
-	// Get users in these hexes
 	usersInRing, err := s.userRepo.GetEligibleUsersInHexes(ctx, hexStrings, string(req.BloodType), payload.UsersLeftToSearch)
 	if err != nil {
 		return err
@@ -192,13 +182,12 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 			break
 		}
 		if actionedMap[u.ID] {
-			continue // Already reached out
+			continue
 		}
 		if u.ID == req.UserID {
-			continue // Don't notify the requester
+			continue
 		}
 
-		// Save state
 		state := &domain.RequestState{
 			RequestID:    req.ID,
 			ActionedByID: u.ID,
@@ -208,7 +197,6 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		}
 		_ = s.reqRepo.SaveRequestState(ctx, state)
 
-		// Notify
 		title := "Urgent: Blood Donation Request"
 		content := "Someone needs " + string(req.BloodType) + " blood near you!"
 		_, _ = s.notifService.Submit(ctx, domain.NotificationTypeDonationRequest, u.ID, title, content)
@@ -227,11 +215,8 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 	nextRetryCount := payload.RetryCount
 
 	if nextRing > s.config.maxKRings {
-		// Exhausted search radius
 		if payload.RetryCount >= s.config.WaveSearchMaxRetries {
 			reqLogger.Warn("Exhausted all search rings and max retries. Marking request as failed.", zap.Int("max_retries", s.config.WaveSearchMaxRetries))
-			
-			// Fail the request
 			req.Status = domain.RequestStatusFailed
 			req.UpdatedAt = time.Now()
 			_ = s.reqRepo.UpdateRequest(ctx, req)
@@ -265,6 +250,5 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		UpdatedAt: time.Now(),
 	}
 
-	// We enqueue the next wave as a fallback. If the request gets completed before 1 hour, that future job will just exit early on `req.Status != Pending`
 	return s.queue.Enqueue(ctx, nextJob)
 }

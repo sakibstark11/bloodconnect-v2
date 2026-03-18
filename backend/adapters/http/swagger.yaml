@@ -2,18 +2,22 @@ openapi: 3.0.3
 info:
   title: BloodConnect API
   description: API documentation for the BloodConnect platform.
-  version: 1.0.0
+  version: 2.0.0
 servers:
   - url: http://localhost:8080
     description: Local development server
 
 paths:
+
+  # ── Health ────────────────────────────────────────────────────────────────
+
   /health:
     get:
       summary: Health check
+      tags: [Health]
       responses:
         '200':
-          description: OK
+          description: Service is healthy
           content:
             application/json:
               schema:
@@ -23,9 +27,12 @@ paths:
                     type: string
                     example: ok
 
+  # ── Users ─────────────────────────────────────────────────────────────────
+
   /users/signup:
     post:
-      summary: Sign up a new user
+      summary: Register a new user
+      tags: [Users]
       requestBody:
         required: true
         content:
@@ -36,28 +43,32 @@ paths:
               properties:
                 name:
                   type: string
+                  example: Alice
                 email:
                   type: string
                   format: email
+                  example: alice@example.com
                 password:
                   type: string
                   format: password
+                  minLength: 6
                 phone:
                   type: string
+                  example: "01700000000"
       responses:
         '201':
-          description: Created
+          description: User created
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: string
+                $ref: '#/components/schemas/IDResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /users/login:
     post:
-      summary: Login
+      summary: Authenticate a user
+      tags: [Users]
       requestBody:
         required: true
         content:
@@ -68,6 +79,7 @@ paths:
               properties:
                 email:
                   type: string
+                  format: email
                 password:
                   type: string
       responses:
@@ -82,175 +94,110 @@ paths:
                     type: string
                   token:
                     type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
-  /users/health:
+  /users/{id}/health:
     put:
-      summary: Update user health details
+      summary: Update user health information
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/UserID'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [user_id, info_type, details]
+              required: [info_type, details]
               properties:
-                user_id:
-                  type: string
                 info_type:
                   type: string
-                  enum: [blood_type, weight, height, last_donation_date, last_vaccination_date, medical_condition]
+                  enum:
+                    - blood_type
+                    - weight
+                    - height
+                    - last_donation_date
+                    - last_vaccination_date
+                    - medical_condition
                 details:
                   type: string
+                  example: "A+"
       responses:
-        '200':
-          description: OK
+        '204':
+          description: Updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
-  /users/location:
+  /users/{id}/location:
     put:
-      summary: Update preferred donation location
+      summary: Update user's preferred donation location
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/UserID'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [user_id, lat, lng]
+              required: [lat, lng]
               properties:
-                user_id:
-                  type: string
                 lat:
                   type: number
+                  format: double
+                  example: 23.8103
                 lng:
                   type: number
+                  format: double
+                  example: 90.4125
       responses:
-        '200':
-          description: OK
+        '204':
+          description: Updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
-  /notifications:
-    post:
-      summary: Create and send a notification
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [type, recipient, title, content]
-              properties:
-                type:
-                  type: string
-                  enum: [blood_donation_request, blood_donation_completion, blood_donation_request_acceptance]
-                recipient:
-                  type: string
-                  description: User ID
-                title:
-                  type: string
-                content:
-                  type: string
-      responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-
-  /notifications/{id}:
-    put:
-      summary: Update notification status
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [status]
-              properties:
-                status:
-                  type: string
-                  enum: [Pending, Sent, Failed, Completed]
-      responses:
-        '200':
-          description: OK
-    delete:
-      summary: Delete notification
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
-
-  /notifications/user/{userID}:
-    get:
-      summary: Get notifications for user
-      parameters:
-        - in: path
-          name: userID
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    ID:
-                      type: string
-                    Type:
-                      type: string
-                    Recipient:
-                      type: string
-                    Status:
-                      type: string
-                    Title:
-                      type: string
-                    Content:
-                      type: string
+  # ── Requests ──────────────────────────────────────────────────────────────
 
   /requests:
     post:
-      summary: Submit a new blood donation request
+      summary: Submit a blood donation request
+      tags: [Requests]
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [user_id, location_lat, location_lng, bag_count, required_by_date, blood_type, contact_phone, description, requester_info, location_name]
+              required:
+                - user_id
+                - location_lat
+                - location_lng
+                - bag_count
+                - required_by_date
+                - blood_type
+                - contact_phone
+                - location_name
               properties:
                 user_id:
                   type: string
-                location_hex:
-                  type: string
                 location_lat:
                   type: number
+                  format: double
                 location_lng:
                   type: number
+                  format: double
                 bag_count:
                   type: integer
+                  minimum: 1
                 required_by_date:
                   type: string
                   format: date-time
                 blood_type:
                   type: string
+                  enum: [A+, A-, B+, B-, AB+, AB-, O+, O-]
                 contact_phone:
                   type: string
                 description:
@@ -261,24 +208,36 @@ paths:
                   type: string
       responses:
         '201':
-          description: Created
+          description: Request submitted
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: string
+                $ref: '#/components/schemas/IDResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /requests/{id}:
+    get:
+      summary: Get a blood donation request with notified user locations
+      tags: [Requests]
+      parameters:
+        - $ref: '#/components/parameters/ResourceID'
+      responses:
+        '200':
+          description: Extended donation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtendedDonationRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /requests/{id}/respond:
     post:
-      summary: Respond to a blood donation request (Accept/Decline)
+      summary: Respond to a blood donation request
+      tags: [Requests]
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/ResourceID'
       requestBody:
         required: true
         content:
@@ -293,63 +252,17 @@ paths:
                   type: string
                   enum: [Accepted, Declined, Donated]
       responses:
-        '200':
+        '204':
           description: Response recorded
-  /requests/{id}:
-      get:
-        summary: Get a blood donation request by ID
-        parameters:
-          - name: id
-            in: path
-            required: true
-            description: The unique identifier of the request
-            schema:
-              type: string
-        responses:
-          '200':
-            description: Successful response
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                    user_id:
-                      type: string
-                    location_hex:
-                      type: string
-                    location_lat:
-                      type: number
-                    location_lng:
-                      type: number
-                    bag_count:
-                      type: integer
-                    required_by_date:
-                      type: string
-                      format: date-time
-                    blood_type:
-                      type: string
-                    contact_phone:
-                      type: string
-                    description:
-                      type: string
-                    requester_info:
-                      type: string
-                    location_name:
-                      type: string
-          '404':
-            description: Request not found
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /requests/{id}/cancel:
     post:
       summary: Cancel a blood donation request
+      tags: [Requests]
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/ResourceID'
       requestBody:
         required: true
         content:
@@ -360,7 +273,211 @@ paths:
               properties:
                 user_id:
                   type: string
-                  description: ID of the user who created the request
+                  description: Must match the original requester's ID
+      responses:
+        '204':
+          description: Request cancelled
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ── Notifications ─────────────────────────────────────────────────────────
+
+  /notifications/user/{userID}:
+    get:
+      summary: Get all notifications for a user
+      tags: [Notifications]
+      parameters:
+        - $ref: '#/components/parameters/UserID'
       responses:
         '200':
-          description: Request Cancelled
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+
+  /notifications/{id}:
+    patch:
+      summary: Update notification status
+      tags: [Notifications]
+      parameters:
+        - $ref: '#/components/parameters/ResourceID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [Pending, Sent, Failed, Completed]
+      responses:
+        '204':
+          description: Status updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      summary: Delete a notification
+      tags: [Notifications]
+      parameters:
+        - $ref: '#/components/parameters/ResourceID'
+      responses:
+        '204':
+          description: Deleted
+
+# ── Reusable components ────────────────────────────────────────────────────
+
+components:
+
+  parameters:
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+    UserID:
+      name: id
+      in: path
+      required: true
+      description: The user's ID
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Validation or request error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Invalid credentials
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    IDResponse:
+      type: object
+      properties:
+        id:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          description: Optional field-level validation errors
+          type: object
+          additionalProperties:
+            type: string
+
+    DonationRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        location_hex:
+          type: string
+        location_lat:
+          type: number
+        location_lng:
+          type: number
+        bag_count:
+          type: integer
+        required_by_date:
+          type: string
+          format: date-time
+        blood_type:
+          type: string
+          enum: [A+, A-, B+, B-, AB+, AB-, O+, O-]
+        contact_phone:
+          type: string
+        description:
+          type: string
+        requester_info:
+          type: string
+        location_name:
+          type: string
+        status:
+          type: string
+          enum: [Pending, Completed, Cancelled, Failed]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RequestActionedUser:
+      type: object
+      properties:
+        user_id:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        h3_hex:
+          type: string
+        action:
+          type: string
+          enum: [Pending, Accepted, Declined, Donated]
+
+    ExtendedDonationRequest:
+      type: object
+      properties:
+        request:
+          $ref: '#/components/schemas/DonationRequest'
+        notified_users:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestActionedUser'
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - blood_donation_request
+            - blood_donation_completion
+            - blood_donation_request_acceptance
+        recipient:
+          type: string
+          description: User ID
+        status:
+          type: string
+          enum: [Pending, Sent, Failed, Completed]
+        title:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

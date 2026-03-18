@@ -1,12 +1,13 @@
-package sqlite
+package models
 
 import (
 	"time"
 
-	"github.com/sakibalam/bloodconnect/domain"
+	"bloodconnect/application/domain"
 )
 
-type requestModel struct {
+// Request is the GORM model for domain.DonationRequest
+type Request struct {
 	ID             string `gorm:"primaryKey;size:64"`
 	UserID         string `gorm:"index;size:64"`
 	LocationHex    string `gorm:"index;size:20"`
@@ -24,7 +25,7 @@ type requestModel struct {
 	UpdatedAt      time.Time
 }
 
-func (m *requestModel) toDomain() *domain.DonationRequest {
+func (m *Request) ToDomain() *domain.DonationRequest {
 	return &domain.DonationRequest{
 		ID:             m.ID,
 		UserID:         m.UserID,
@@ -44,8 +45,8 @@ func (m *requestModel) toDomain() *domain.DonationRequest {
 	}
 }
 
-func fromDomainRequest(r *domain.DonationRequest) *requestModel {
-	return &requestModel{
+func RequestFromDomain(r *domain.DonationRequest) *Request {
+	return &Request{
 		ID:             r.ID,
 		UserID:         r.UserID,
 		LocationHex:    r.LocationHex,
@@ -64,7 +65,8 @@ func fromDomainRequest(r *domain.DonationRequest) *requestModel {
 	}
 }
 
-type requestStateModel struct {
+// RequestState is the GORM model for domain.RequestState
+type RequestState struct {
 	RequestID    string `gorm:"primaryKey;size:64"`
 	ActionedByID string `gorm:"primaryKey;size:64"`
 	Action       string `gorm:"size:20"`
@@ -72,7 +74,7 @@ type requestStateModel struct {
 	UpdatedAt    time.Time
 }
 
-func (m *requestStateModel) toDomain() *domain.RequestState {
+func (m *RequestState) ToDomain() *domain.RequestState {
 	return &domain.RequestState{
 		RequestID:    m.RequestID,
 		ActionedByID: m.ActionedByID,
@@ -82,8 +84,8 @@ func (m *requestStateModel) toDomain() *domain.RequestState {
 	}
 }
 
-func fromDomainRequestState(s *domain.RequestState) *requestStateModel {
-	return &requestStateModel{
+func RequestStateFromDomain(s *domain.RequestState) *RequestState {
+	return &RequestState{
 		RequestID:    s.RequestID,
 		ActionedByID: s.ActionedByID,
 		Action:       string(s.Action),

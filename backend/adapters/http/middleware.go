@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"bloodconnect/application/domain"
 	"github.com/oklog/ulid/v2"
-	"github.com/sakibalam/bloodconnect/domain"
 	"go.uber.org/zap"
 )
 
@@ -27,7 +27,7 @@ func RequestLogger(logger *zap.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			traceID := "trace_" + ulid.Make().String()
-			
+
 			// Inject traceID into context
 			ctx := context.WithValue(r.Context(), domain.TraceIDKey, traceID)
 			r = r.WithContext(ctx)
@@ -41,7 +41,7 @@ func RequestLogger(logger *zap.Logger) func(http.Handler) http.Handler {
 
 			// Wrap ResponseWriter to capture status code
 			rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
-			
+
 			// Execute actual handler
 			next.ServeHTTP(rw, r)
 
@@ -62,3 +62,20 @@ func GetTraceID(ctx context.Context) string {
 	}
 	return ""
 }
+
+// InjectUserID reads the X-User-ID header and injects it into the request context.
+// Returns 401 if the header is absent. Used to protect /users/me/* routes.
+func InjectUserID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID := r.Header.Get("X-User-ID")
+		if userID == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error":"X-User-ID header is required"}`))
+			return
+		}
+		ctx := context.WithValue(r.Context(), domain.UserIDKey, userID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+

@@ -55,7 +55,7 @@ func main() {
 	workerService.Start(context.Background())
 
 	// Initialize HTTP Router (address is an HTTP adapter concern)
-	router := api_http.SetupRouter(userService, notifService, requestService)
+	router := api_http.SetupRouter(userService, notifService, requestService, appConfig)
 	loggedRouter := api_http.RequestLogger(logger)(router)
 
 	logger.Info("Server starting", zap.String("addr", ":8080"))

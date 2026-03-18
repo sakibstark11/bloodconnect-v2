@@ -32,16 +32,16 @@ func (h *RequestHandler) RegisterMeRoutes(mux *http.ServeMux) {
 
 // SubmitRequestBody is the expected body for POST /requests
 type SubmitRequestBody struct {
-	UserID         string    `json:"user_id"          validate:"required"`
-	LocationLat    float64   `json:"location_lat"     validate:"required,latitude"`
-	LocationLng    float64   `json:"location_lng"     validate:"required,longitude"`
-	BagCount       int       `json:"bag_count"        validate:"required,min=1"`
-	RequiredByDate string    `json:"required_by_date" validate:"required"`
-	BloodType      string    `json:"blood_type"       validate:"required"`
-	ContactPhone   string    `json:"contact_phone"    validate:"required"`
-	Description    string    `json:"description"`
-	RequesterInfo  string    `json:"requester_info"`
-	LocationName   string    `json:"location_name"    validate:"required"`
+	UserID         string  `json:"user_id"          validate:"required"`
+	LocationLat    float64 `json:"location_lat"     validate:"required,latitude"`
+	LocationLng    float64 `json:"location_lng"     validate:"required,longitude"`
+	BagCount       int     `json:"bag_count"        validate:"required,min=1"`
+	RequiredByDate string  `json:"required_by_date" validate:"required"`
+	BloodType      string  `json:"blood_type"       validate:"required"`
+	ContactPhone   string  `json:"contact_phone"    validate:"required"`
+	Description    string  `json:"description"`
+	RequesterInfo  string  `json:"requester_info"`
+	LocationName   string  `json:"location_name"    validate:"required"`
 }
 
 // SubmitRequestResponse is the response body for POST /requests
@@ -93,10 +93,8 @@ func (h *RequestHandler) List(w http.ResponseWriter, r *http.Request) {
 	if page < 1 {
 		page = 1
 	}
-	pageSize, _ := strconv.Atoi(q.Get("page_size"))
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
+	// page_size is system-defined, not user-defined
+	pageSize := 20
 
 	filters := application.RequestFilters{
 		BloodType:   q.Get("blood_type"),

@@ -6,6 +6,7 @@ import (
 
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
+
 	"github.com/oklog/ulid/v2"
 )
 
@@ -42,7 +43,7 @@ func (s *notificationService) Submit(ctx context.Context, notifType domain.Notif
 		return "", err
 	}
 
-	// Best-effort send — notifications are fire-and-forget, no status tracking
+	// Best-effort send — notifications are fire-and-forget
 	_ = s.sender.Send(ctx, notification)
 
 	return id, nil

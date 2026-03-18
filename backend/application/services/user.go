@@ -7,13 +7,15 @@ import (
 
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/oklog/ulid/v2"
 	"github.com/uber/h3-go/v4"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService interface {
 	Signup(ctx context.Context, name, email, password, phone string) (string, error)
-	Login(ctx context.Context, email, password string) (*domain.User, error)
+	Login(ctx context.Context, email, password string) (string, *domain.User, error)
 	GetMe(ctx context.Context) (*domain.User, error)
 	UpdateHealth(ctx context.Context, infoType domain.InfoType, details string) error
 	UpdateLocation(ctx context.Context, lat, lng float64) error
@@ -31,11 +33,16 @@ func NewUserService(repo application.UserRepository, config *application.AppConf
 func (s *userService) Signup(ctx context.Context, name, email, password, phone string) (string, error) {
 	id := "user_" + ulid.Make().String()
 
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
 	user := &domain.User{
 		ID:        id,
 		Name:      name,
 		Email:     email,
-		Password:  password, // TODO: Hash password
+		Password:  string(hashedPassword),
 		Phone:     phone,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
@@ -48,21 +55,35 @@ func (s *userService) Signup(ctx context.Context, name, email, password, phone s
 	return id, nil
 }
 
-func (s *userService) Login(ctx context.Context, email, password string) (*domain.User, error) {
+func (s *userService) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	if user == nil {
-		return nil, errors.New("invalid credentials")
+		return "", nil, errors.New("invalid credentials")
 	}
 
-	// TODO: verify hashed password
-	if user.Password != password {
-		return nil, errors.New("invalid credentials")
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return "", nil, errors.New("invalid credentials")
 	}
 
-	return user, nil
+	token, err := s.generateToken(user.ID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return token, user, nil
+}
+
+func (s *userService) generateToken(userID string) (string, error) {
+	claims := jwt.MapClaims{
+		"user_id": userID,
+		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(s.config.JWTSecret))
 }
 
 // GetMe returns the currently authenticated user (ID read from context).

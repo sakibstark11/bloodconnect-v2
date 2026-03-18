@@ -4,15 +4,17 @@ import (
 	"net/http"
 
 	"bloodconnect/adapters/http/handlers"
+	"bloodconnect/application"
 	"bloodconnect/application/services"
 )
 
 // SetupRouter wires all routes and applies middleware.
-// /users/me/* routes are wrapped with InjectUserID middleware.
+// /users/me/* routes are wrapped with AuthMiddleware.
 func SetupRouter(
 	userService services.UserService,
 	notifService services.NotificationService,
 	requestService services.RequestService,
+	config *application.AppConfig,
 ) http.Handler {
 	mux := http.NewServeMux()
 
@@ -29,14 +31,16 @@ func SetupRouter(
 	uh.RegisterPublicRoutes(mux)
 	rh.RegisterPublicRoutes(mux)
 
-	// ── Protected /users/me/* routes (InjectUserID middleware) ─────────────
+	// ── Protected /users/me/* routes (AuthMiddleware with JWT verification) ──
 	meMux := http.NewServeMux()
 	uh.RegisterMeRoutes(meMux)
 	nh.RegisterMeRoutes(meMux)
 	rh.RegisterMeRoutes(meMux)
 
-	mux.Handle("/users/me", InjectUserID(meMux))
-	mux.Handle("/users/me/", InjectUserID(meMux))
+	auth := AuthMiddleware(config.JWTSecret)
+
+	mux.Handle("/users/me", auth(meMux))
+	mux.Handle("/users/me/", auth(meMux))
 
 	return enableCORS(mux)
 }
@@ -45,7 +49,7 @@ func enableCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-ID")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Max-Age", "3600")
 
 		if r.Method == http.MethodOptions {

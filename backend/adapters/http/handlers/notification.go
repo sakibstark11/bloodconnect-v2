@@ -3,8 +3,8 @@ package handlers
 import (
 	"net/http"
 
-	"bloodconnect/application/services"
 	"bloodconnect/application/domain"
+	"bloodconnect/application/services"
 )
 
 type NotificationHandler struct {

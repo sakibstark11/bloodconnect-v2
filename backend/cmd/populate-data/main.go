@@ -10,14 +10,12 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/uber/h3-go/v4"
 )
 
 const (
 	baseURL          = "http://localhost:8080"
-	maxUsers         = 1_000
-	maxRequests      = 50
+	maxUsers         = 100
+	maxRequests      = 20
 	numWorkers       = 5
 	randomAcceptance = 10
 	randomDeclines   = 15
@@ -28,6 +26,11 @@ var (
 	minLat, maxLat = 23.68, 23.90
 	minLng, maxLng = 90.33, 90.50
 )
+
+type userSession struct {
+	ID    string
+	Token string
+}
 
 type client struct {
 	hc *http.Client
@@ -47,8 +50,8 @@ func main() {
 		},
 	}
 
-	// 1. Generate Users
-	userIDsChan := make(chan string, maxUsers)
+	// 1. Generate Users & Login
+	sessionsChan := make(chan userSession, maxUsers)
 	var userWg sync.WaitGroup
 	jobs := make(chan int, maxUsers)
 
@@ -57,9 +60,9 @@ func main() {
 		go func() {
 			defer userWg.Done()
 			for i := range jobs {
-				uid, err := populateUser(c, i)
+				session, err := populateUser(c, i)
 				if err == nil {
-					userIDsChan <- uid
+					sessionsChan <- session
 				}
 			}
 		}()
@@ -70,11 +73,15 @@ func main() {
 	}
 	close(jobs)
 	userWg.Wait()
-	close(userIDsChan)
+	close(sessionsChan)
 
-	var userIDs []string
-	for uid := range userIDsChan {
-		userIDs = append(userIDs, uid)
+	var sessions []userSession
+	for s := range sessionsChan {
+		sessions = append(sessions, s)
+	}
+
+	if len(sessions) == 0 {
+		log.Fatal("No users were created. Is the server running?")
 	}
 
 	// 2. Generate Requests
@@ -87,8 +94,8 @@ func main() {
 		reqWg.Add(1)
 		go func(idx int) {
 			defer reqWg.Done()
-			requesterID := userIDs[rand.Intn(len(userIDs))]
-			reqID, err := populateRequest(c, idx, requesterID)
+			session := sessions[rand.Intn(len(sessions))]
+			reqID, err := populateRequest(c, idx, session)
 			if err == nil {
 				reqMu.Lock()
 				reqIDs = append(reqIDs, reqID)
@@ -99,63 +106,73 @@ func main() {
 	reqWg.Wait()
 
 	// 3. Random Response Phase
-	// This uses the generated pools to simulate "random acceptance" counts
 	log.Printf("Simulating %d Acceptances and %d Declines...", randomAcceptance, randomDeclines)
 
-	simulateResponses(c, userIDs, reqIDs, "Accepted", randomAcceptance)
-	simulateResponses(c, userIDs, reqIDs, "Declined", randomDeclines)
+	simulateResponses(c, sessions, reqIDs, "Accepted", randomAcceptance)
+	simulateResponses(c, sessions, reqIDs, "Declined", randomDeclines)
 
 	log.Printf("Process completed in %v", time.Since(start))
 }
 
-func simulateResponses(c *client, userIDs, reqIDs []string, action string, count int) {
-	if len(userIDs) == 0 || len(reqIDs) == 0 {
+func simulateResponses(c *client, sessions []userSession, reqIDs []string, action string, count int) {
+	if len(sessions) == 0 || len(reqIDs) == 0 {
 		return
 	}
 
 	for i := 0; i < count; i++ {
-		randomUser := userIDs[rand.Intn(len(userIDs))]
+		session := sessions[rand.Intn(len(sessions))]
 		randomReq := reqIDs[rand.Intn(len(reqIDs))]
 
-		c.respondToRequest(randomReq, randomUser, action)
+		c.respondToRequest(randomReq, session, action)
 	}
 }
 
-func populateUser(c *client, index int) (string, error) {
+func populateUser(c *client, index int) (userSession, error) {
 	suffix := time.Now().UnixNano() % 100000
 	email := fmt.Sprintf("user%d_%d@example.com", index, suffix)
+	password := "password123"
 	phone := fmt.Sprintf("+8801%d%04d", suffix%100, index%10000)
 
-	res, err := c.doRequest(http.MethodPost, "/users/signup", map[string]string{
+	// Signup
+	signupRes, err := c.doRequest(http.MethodPost, "/users/signup", "", map[string]string{
 		"name":     fmt.Sprintf("User %d", index),
 		"email":    email,
-		"password": "password123",
+		"password": password,
 		"phone":    phone,
 	})
 	if err != nil {
-		return "", err
+		return userSession{}, err
 	}
-	uid := res["id"].(string)
+	uid := signupRes["id"].(string)
 
+	// Login to get token
+	loginRes, err := c.doRequest(http.MethodPost, "/users/login", "", map[string]string{
+		"email":    email,
+		"password": password,
+	})
+	if err != nil {
+		return userSession{}, err
+	}
+	token := loginRes["token"].(string)
+	session := userSession{ID: uid, Token: token}
+
+	// Update Health & Location using token
 	bType := bloodTypes[rand.Intn(len(bloodTypes))]
-	_ = c.updateHealth(uid, "blood_type", bType)
+	_ = c.updateHealth(session, "blood_type", bType)
 
 	lat := minLat + rand.Float64()*(maxLat-minLat)
 	lng := minLng + rand.Float64()*(maxLng-minLng)
-	cell, _ := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, 9)
-	_ = c.updateLocation(uid, lat, lng, cell.String())
+	_ = c.updateLocation(session, lat, lng)
 
-	return uid, nil
+	return session, nil
 }
 
-func populateRequest(c *client, i int, uid string) (string, error) {
+func populateRequest(c *client, i int, session userSession) (string, error) {
 	lat := minLat + rand.Float64()*(maxLat-minLat)
 	lng := minLng + rand.Float64()*(maxLng-minLng)
-	cell, _ := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, 9)
 
 	payload := map[string]interface{}{
-		"user_id":          uid,
-		"location_hex":     cell.String(),
+		"user_id":          session.ID,
 		"location_lat":     lat,
 		"location_lng":     lng,
 		"bag_count":        rand.Intn(5) + 1,
@@ -166,47 +183,47 @@ func populateRequest(c *client, i int, uid string) (string, error) {
 		"requester_info":   "Emergency Unit",
 		"location_name":    "City Hospital",
 	}
-	res, err := c.doRequest(http.MethodPost, "/requests", payload)
+	res, err := c.doRequest(http.MethodPost, "/requests", "", payload)
 	if err != nil {
 		return "", err
 	}
 	return res["id"].(string), nil
 }
 
-func (c *client) respondToRequest(requestID, userID, action string) {
-	path := fmt.Sprintf("/requests/%s/respond", requestID)
+func (c *client) respondToRequest(requestID string, session userSession, action string) {
+	path := fmt.Sprintf("/users/me/requests/%s/respond", requestID)
 	payload := map[string]string{
-		"user_id": userID,
-		"action":  action,
+		"action": action,
 	}
-	_, err := c.doRequest(http.MethodPost, path, payload)
+	_, err := c.doRequest(http.MethodPost, path, session.Token, payload)
 	if err != nil {
-		log.Printf("Response failed | Req: %s | User: %s | Action: %s | Err: %v", requestID, userID, action, err)
+		log.Printf("Response failed | Req: %s | User: %s | Action: %s | Err: %v", requestID, session.ID, action, err)
 	} else {
-		log.Printf("Response recorded | Req: %s | User: %s | Action: %s", requestID, userID, action)
+		log.Printf("Response recorded | Req: %s | User: %s | Action: %s", requestID, session.ID, action)
 	}
 }
 
-// --- Reusable HTTP logic ---
-
-func (c *client) updateHealth(uid, infoType, details string) error {
-	_, err := c.doRequest(http.MethodPut, "/users/health", map[string]string{
-		"user_id": uid, "info_type": infoType, "details": details,
+func (c *client) updateHealth(session userSession, infoType, details string) error {
+	_, err := c.doRequest(http.MethodPut, "/users/me/health", session.Token, map[string]string{
+		"info_type": infoType, "details": details,
 	})
 	return err
 }
 
-func (c *client) updateLocation(uid string, lat, lng float64, hex string) error {
-	_, err := c.doRequest(http.MethodPut, "/users/location", map[string]interface{}{
-		"user_id": uid, "lat": lat, "lng": lng, "h3_hex": hex,
+func (c *client) updateLocation(session userSession, lat, lng float64) error {
+	_, err := c.doRequest(http.MethodPut, "/users/me/location", session.Token, map[string]interface{}{
+		"lat": lat, "lng": lng,
 	})
 	return err
 }
 
-func (c *client) doRequest(method, path string, body interface{}) (map[string]interface{}, error) {
+func (c *client) doRequest(method, path, token string, body interface{}) (map[string]interface{}, error) {
 	jsonBody, _ := json.Marshal(body)
 	req, _ := http.NewRequest(method, baseURL+path, bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := c.hc.Do(req)
 	if err != nil {

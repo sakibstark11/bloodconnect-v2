@@ -2,10 +2,15 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
+	"bloodconnect/adapters/http/handlers"
 	"bloodconnect/application/domain"
+
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/oklog/ulid/v2"
 	"go.uber.org/zap"
 )
@@ -63,19 +68,44 @@ func GetTraceID(ctx context.Context) string {
 	return ""
 }
 
-// InjectUserID reads the X-User-ID header and injects it into the request context.
-// Returns 401 if the header is absent. Used to protect /users/me/* routes.
-func InjectUserID(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		userID := r.Header.Get("X-User-ID")
-		if userID == "" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error":"X-User-ID header is required"}`))
-			return
-		}
-		ctx := context.WithValue(r.Context(), domain.UserIDKey, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
+// AuthMiddleware parses the Authorization header, validates the JWT, and injects the user_id into context.
+func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				handlers.RespondJSONError(w, http.StatusUnauthorized, "Authorization header with Bearer token is required", nil)
+				return
+			}
 
+			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					handlers.RespondJSONError(w, http.StatusUnauthorized, "Invalid or expired token", nil)
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
+				return []byte(jwtSecret), nil
+			})
+
+			if err != nil || !token.Valid {
+				handlers.RespondJSONError(w, http.StatusUnauthorized, "Invalid or expired token", nil)
+				return
+			}
+
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				handlers.RespondJSONError(w, http.StatusUnauthorized, "Invalid token claims", nil)
+				return
+			}
+
+			userID, ok := claims["user_id"].(string)
+			if !ok || userID == "" {
+				handlers.RespondJSONError(w, http.StatusUnauthorized, "User ID missing from token", nil)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), domain.UserIDKey, userID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}

@@ -9,6 +9,8 @@ type AppConfig struct {
 	JobQueueInterval         time.Duration
 	WaveSearchMaxRetries     int
 	WaveSearchRetryDelay     time.Duration
+	JWTSecret                string
+	DefaultPageSize          int
 }
 
 // DefaultAppConfig returns the default configuration for the application
@@ -20,5 +22,7 @@ func DefaultAppConfig() *AppConfig {
 		JobQueueInterval:         120 * time.Second,
 		WaveSearchMaxRetries:     3,
 		WaveSearchRetryDelay:     5 * time.Minute, // shortened for testing
+		JWTSecret:                "super-secret-key-change-me",
+		DefaultPageSize:          20,
 	}
 }

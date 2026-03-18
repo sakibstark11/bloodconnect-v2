@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"bloodconnect/application/services"
 	"bloodconnect/application/domain"
+	"bloodconnect/application/services"
 )
 
 type UserHandler struct {
@@ -85,13 +85,13 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.service.Login(r.Context(), req.Email, req.Password)
+	token, user, err := h.service.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		RespondJSONError(w, http.StatusUnauthorized, "Invalid credentials", nil)
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, LoginResponse{ID: user.ID, Token: "dummy-token-for-now"})
+	RespondJSON(w, http.StatusOK, LoginResponse{ID: user.ID, Token: token})
 }
 
 func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {

@@ -17,7 +17,7 @@ services:
     environment:
       SWAGGER_JSON: /foo/swagger.yaml
     volumes:
-      - ./adapters/http/swagger.yaml:/foo/swagger.yaml
+      - ./backend/adapters/http/swagger.yaml:/foo/swagger.yaml
 
   web-client:
     build:

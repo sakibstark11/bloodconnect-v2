@@ -96,7 +96,9 @@ func main() {
 			defer reqWg.Done()
 			session := sessions[rand.Intn(len(sessions))]
 			reqID, err := populateRequest(c, idx, session)
-			if err == nil {
+			if err != nil {
+				log.Printf("Request failed | User: %s | Err: %v", session.ID, err)
+			} else {
 				reqMu.Lock()
 				reqIDs = append(reqIDs, reqID)
 				reqMu.Unlock()
@@ -175,7 +177,7 @@ func populateRequest(c *client, i int, session userSession) (string, error) {
 		"location_lat":     lat,
 		"location_lng":     lng,
 		"bag_count":        rand.Intn(5) + 1,
-		"required_by_date": time.Now().Add(time.Duration(rand.Intn(72)+240) * time.Hour).Format("2006-01-02T15:04:05.000Z"),
+		"required_by_date": time.Now().UTC().Add(7*24*time.Hour + 1*time.Minute).Format("2006-01-02T15:04:05.000Z"),
 		"blood_type":       bloodTypes[rand.Intn(len(bloodTypes))],
 		"description":      fmt.Sprintf("Urgent request #%d", i),
 		"requester_info":   "Emergency Unit",

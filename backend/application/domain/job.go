@@ -15,7 +15,8 @@ const (
 type JobType string
 
 const (
-	JobTypeWaveSearch JobType = "wave_search"
+	JobTypeWaveSearch     JobType = "wave_search"
+	JobTypeCheckResponses JobType = "check_responses"
 )
 
 // Job represents a background task to process, specifically donor wave searches
@@ -34,6 +35,5 @@ type WaveSearchPayload struct {
 	RequestID         string `json:"request_id"`
 	CurrentRing       int    `json:"current_ring"`
 	CenterHex         string `json:"center_hex"`
-	UsersLeftToSearch int    `json:"users_left_to_search"`
 	RetryCount        int    `json:"retry_count"`
 }

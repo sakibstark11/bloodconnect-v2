@@ -6,6 +6,7 @@ import (
 	"bloodconnect/adapters/sqlite/models"
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
+
 	"gorm.io/gorm"
 )
 
@@ -22,9 +23,10 @@ func (q *jobQueue) Enqueue(ctx context.Context, job *domain.Job) error {
 }
 
 func (q *jobQueue) FetchNextAvailable(ctx context.Context) (*domain.Job, error) {
+	now := domain.Now()
 	var m models.Job
 	res := q.db.WithContext(ctx).
-		Where("status = ? AND run_at <= CURRENT_TIMESTAMP", domain.JobStatusPending).
+		Where("status = ? AND run_at <= ?", string(domain.JobStatusPending), string(now)).
 		Order("created_at asc").
 		First(&m)
 	if res.Error != nil {

@@ -94,6 +94,8 @@ func (s *jobWorkerService) processNextJob(ctx context.Context) {
 	switch job.Type {
 	case domain.JobTypeWaveSearch:
 		processErr = s.processWaveSearch(ctx, job, jobLogger)
+	case domain.JobTypeCheckResponses:
+		processErr = s.processCheckResponses(ctx, job, jobLogger)
 	default:
 		jobLogger.Warn("Unknown job type")
 	}
@@ -124,28 +126,48 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		return nil
 	}
 
-	centerCell := h3.Cell(h3.IndexFromString(payload.CenterHex))
-
 	reqLogger.Info("Processing wave search",
 		zap.Int("ring", payload.CurrentRing),
 		zap.Int("retry", payload.RetryCount),
-		zap.Int("users_left_to_search", payload.UsersLeftToSearch),
 		zap.Int("bag_count", req.BagCount),
 	)
 
-	var ringHexes []h3.Cell
-
-	ringHexes, err = h3.GridRing(centerCell, payload.CurrentRing)
+	actionedUsers, err := s.reqRepo.GetActionedUsers(ctx, payload.RequestID)
 	if err != nil {
-		allRings, diskErr := h3.GridDiskDistances(centerCell, payload.CurrentRing)
-		if diskErr != nil {
-			return diskErr
-		}
-		ringHexes = allRings[payload.CurrentRing]
+		return err
 	}
 
-	if payload.CurrentRing == 1 {
-		ringHexes = append(ringHexes, centerCell)
+	actionedMap := make(map[string]domain.ActionStatus)
+	acceptedUsers := 0
+	declinedUsers := 0
+	for _, u := range actionedUsers {
+		actionedMap[u.ActionedByID] = u.Action
+
+		if u.Action == domain.ActionStatusAccepted {
+			acceptedUsers++
+		} else if u.Action == domain.ActionStatusDeclined || s.shouldActionBeConsideredDormant(&u) {
+			declinedUsers++
+		}
+	}
+
+	usersLeftToSearch := req.BagCount - acceptedUsers
+	if usersLeftToSearch <= 0 {
+		reqLogger.Info("All users reached out to, waiting for responses. Scheduling response check.",
+			zap.String("payload_request_id", payload.RequestID),
+		)
+		return s.scheduleCheckResponses(ctx, job, req, &payload, reqLogger)
+	}
+
+	reqLogger.Info("Searching for users",
+		zap.Int("accepted_users", acceptedUsers),
+		zap.Int("declined_users", declinedUsers),
+		zap.Int("users_left_to_search", usersLeftToSearch),
+	)
+
+	centerCell := h3.Cell(h3.IndexFromString(payload.CenterHex))
+	ringHexes, err := s.getRingHexes(centerCell, payload.CurrentRing)
+	if err != nil {
+		return err
 	}
 
 	hexStrings := make([]string, len(ringHexes))
@@ -153,37 +175,61 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		hexStrings[i] = h.String()
 	}
 
-	actionedUsers, err := s.reqRepo.GetActionedUsers(ctx, payload.RequestID)
+	usersInRing, err := s.userRepo.GetEligibleUsersInHexes(ctx, hexStrings, string(req.BloodType), usersLeftToSearch)
 	if err != nil {
 		return err
 	}
 
-	usersLeftToSearch := payload.UsersLeftToSearch
-
-	actionedMap := make(map[string]bool)
-	for _, u := range actionedUsers {
-		if u.Action == domain.ActionStatusPending && u.UpdatedAt.ToTime().Add(1*time.Hour).Before(time.Now()) {
-			usersLeftToSearch++
-		}
-		actionedMap[u.ActionedByID] = true
+	if len(usersInRing) == 0 {
+		reqLogger.Info("No eligible users found in hexes",
+			zap.Int("ring", payload.CurrentRing),
+			zap.Int("hexes_count", len(hexStrings)),
+		)
+	} else {
+		reqLogger.Info("Found eligible users in hexes",
+			zap.Int("users_found", len(usersInRing)),
+			zap.Int("ring", payload.CurrentRing),
+			zap.Int("hexes_count", len(hexStrings)),
+		)
 	}
 
-	usersInRing, err := s.userRepo.GetEligibleUsersInHexes(ctx, hexStrings, string(req.BloodType), payload.UsersLeftToSearch)
-	if err != nil {
+	if err := s.notifyUsers(ctx, &usersInRing, req, &actionedMap, &usersLeftToSearch, reqLogger); err != nil {
 		return err
 	}
 
-	reqLogger.Info("Found eligible users in hexes",
-		zap.Int("users_found", len(usersInRing)),
-		zap.Int("ring", payload.CurrentRing),
-		zap.Int("hexes_count", len(hexStrings)),
-	)
+	if usersLeftToSearch <= 0 {
+		reqLogger.Info("All users reached out to, waiting for responses. Scheduling response check.",
+			zap.String("payload_request_id", payload.RequestID),
+		)
+		return s.scheduleCheckResponses(ctx, job, req, &payload, reqLogger)
+	}
 
-	for _, u := range usersInRing {
-		if usersLeftToSearch <= 0 {
-			break
+	return s.scheduleNextWaveSearch(ctx, job, req, &payload, reqLogger)
+}
+
+func (s *jobWorkerService) shouldActionBeConsideredDormant(u *domain.RequestState) bool {
+	return u.Action == domain.ActionStatusPending && u.UpdatedAt.ToTime().Add(1*time.Hour).Before(time.Now())
+}
+
+func (s *jobWorkerService) getRingHexes(centerCell h3.Cell, ring int) ([]h3.Cell, error) {
+	ringHexes, err := h3.GridRing(centerCell, ring)
+	if err != nil {
+		allRings, diskErr := h3.GridDiskDistances(centerCell, ring)
+		if diskErr != nil {
+			return nil, diskErr
 		}
-		if actionedMap[u.ID] {
+		ringHexes = allRings[ring]
+	}
+
+	if ring == 1 {
+		ringHexes = append(ringHexes, centerCell)
+	}
+	return ringHexes, nil
+}
+
+func (s *jobWorkerService) notifyUsers(ctx context.Context, users *[]domain.User, req *domain.DonationRequest, actionedMap *map[string]domain.ActionStatus, usersLeftToSearch *int, reqLogger *zap.Logger) error {
+	for _, u := range *users {
+		if _, ok := (*actionedMap)[u.ID]; ok {
 			continue
 		}
 		if u.ID == req.UserID {
@@ -197,21 +243,47 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 			CreatedAt:    domain.Now(),
 			UpdatedAt:    domain.Now(),
 		}
-		_ = s.reqRepo.SaveRequestState(ctx, state)
+		if err := s.reqRepo.SaveRequestState(ctx, state); err != nil {
+			reqLogger.Error("Error saving request state", zap.Error(err), zap.String("user_id", u.ID))
+			continue
+		}
 
 		title := "Urgent: Blood Donation Request"
 		content := "Someone needs " + string(req.BloodType) + " blood near you!"
-		_, _ = s.notifService.Submit(ctx, domain.NotificationTypeDonationRequest, u.ID, title, content)
+		if _, err := s.notifService.Submit(ctx, domain.NotificationTypeDonationRequest, u.ID, title, content); err != nil {
+			reqLogger.Error("Error submitting notification", zap.Error(err), zap.String("user_id", u.ID))
+			continue
+		}
 
-		usersLeftToSearch--
 		reqLogger.Info("Notified eligible user", zap.String("notified_user_id", u.ID))
+		(*usersLeftToSearch)--
+	}
+	return nil
+}
+
+func (s *jobWorkerService) scheduleCheckResponses(ctx context.Context, job *domain.Job, req *domain.DonationRequest, payload *domain.WaveSearchPayload, reqLogger *zap.Logger) error {
+	runAt := time.Now().Add(1 * time.Hour)
+
+	nextJob := &domain.Job{
+		ID:        "job_" + ulid.Make().String(),
+		Type:      domain.JobTypeCheckResponses,
+		Payload:   job.Payload,
+		Status:    domain.JobStatusPending,
+		RunAt:     domain.ISOTimestamp(runAt.Format("2006-01-02T15:04:05.000Z")),
+		CreatedAt: domain.Now(),
+		UpdatedAt: domain.Now(),
 	}
 
-	if usersLeftToSearch <= 0 {
-		reqLogger.Info("All users reached out to, waiting for responses")
-		return nil
-	}
+	return s.queue.Enqueue(ctx, nextJob)
+}
 
+func (s *jobWorkerService) processCheckResponses(ctx context.Context, job *domain.Job, jobLogger *zap.Logger) error {
+	jobLogger.Info("Checking responses for request")
+	// For now, we just delegate back to processWaveSearch which handles
+	// dormant actions and finding more users if needed.
+	return s.processWaveSearch(ctx, job, jobLogger)
+}
+func (s *jobWorkerService) scheduleNextWaveSearch(ctx context.Context, job *domain.Job, req *domain.DonationRequest, payload *domain.WaveSearchPayload, reqLogger *zap.Logger) error {
 	nextRing := payload.CurrentRing + 1
 	runAt := time.Now().Add(s.config.JobQueueInterval)
 	nextRetryCount := payload.RetryCount
@@ -236,11 +308,10 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 	}
 
 	nextPayload := domain.WaveSearchPayload{
-		RequestID:         req.ID,
-		CurrentRing:       nextRing,
-		CenterHex:         payload.CenterHex,
-		UsersLeftToSearch: usersLeftToSearch,
-		RetryCount:        nextRetryCount,
+		RequestID:   req.ID,
+		CurrentRing: nextRing,
+		CenterHex:   payload.CenterHex,
+		RetryCount:  nextRetryCount,
 	}
 	nextPayloadBytes, _ := json.Marshal(nextPayload)
 	nextJob := &domain.Job{
@@ -248,7 +319,7 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		Type:      domain.JobTypeWaveSearch,
 		Payload:   string(nextPayloadBytes),
 		Status:    domain.JobStatusPending,
-		RunAt:     domain.ISOTimestamp(runAt.Format("2006-01-02T15:04:05Z")),
+		RunAt:     domain.ISOTimestamp(runAt.Format("2006-01-02T15:04:05.000Z")),
 		CreatedAt: domain.Now(),
 		UpdatedAt: domain.Now(),
 	}

@@ -148,7 +148,7 @@ func (s *requestService) SubmitRequest(ctx context.Context, userID, bloodType, d
 	daysUntilReq := requiredBy.ToTime().Sub(now.ToTime()).Hours() / 24.0
 
 	if daysUntilReq > float64(s.config.ProcessRequestWindowDays) {
-		runAt = domain.ISOTimestamp(requiredBy.ToTime().Add(-time.Duration(s.config.ProcessRequestWindowDays) * 24 * time.Hour).Format("2006-01-02T15:04:05Z"))
+		runAt = domain.ISOTimestamp(requiredBy.ToTime().Add(-time.Duration(s.config.ProcessRequestWindowDays) * 24 * time.Hour).Format("2006-01-02T15:04:05.000Z"))
 	}
 
 	payload := domain.WaveSearchPayload{

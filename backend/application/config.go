@@ -6,9 +6,10 @@ type AppConfig struct {
 	ProcessRequestWindowDays int
 	SearchRadiusKm           float64
 	H3HexResolution          int
-	JobQueueInterval         time.Duration
+	WaveSearchInterval       time.Duration
 	WaveSearchMaxRetries     int
 	WaveSearchRetryDelay     time.Duration
+	RequestAcceptanceWindow  time.Duration
 	JWTSecret                string
 	DefaultPageSize          int
 	NotificationPageSize     int
@@ -20,8 +21,9 @@ func DefaultAppConfig() *AppConfig {
 		ProcessRequestWindowDays: 7,
 		SearchRadiusKm:           5.0,
 		H3HexResolution:          8,
-		JobQueueInterval:         120 * time.Second,
+		WaveSearchInterval:       3 * time.Minute,
 		WaveSearchMaxRetries:     3,
+		RequestAcceptanceWindow:  1 * time.Hour,
 		WaveSearchRetryDelay:     5 * time.Minute,
 		JWTSecret:                "super-secret-key-change-me",
 		DefaultPageSize:          20,

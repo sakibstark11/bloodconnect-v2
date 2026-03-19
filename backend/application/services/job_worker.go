@@ -272,7 +272,7 @@ func (s *jobWorkerService) notifyUsers(ctx context.Context, users *[]domain.User
 }
 
 func (s *jobWorkerService) scheduleCheckResponses(ctx context.Context, job *domain.Job, req *domain.DonationRequest, payload *domain.WaveSearchPayload, reqLogger *zap.Logger) error {
-	runAt := time.Now().Add(1 * time.Hour)
+	runAt := time.Now().Add(s.config.RequestAcceptanceWindow)
 
 	nextJob := &domain.Job{
 		ID:        "job_" + ulid.Make().String(),
@@ -293,7 +293,7 @@ func (s *jobWorkerService) processCheckResponses(ctx context.Context, job *domai
 }
 func (s *jobWorkerService) scheduleNextWaveSearch(ctx context.Context, job *domain.Job, req *domain.DonationRequest, payload *domain.WaveSearchPayload, reqLogger *zap.Logger) error {
 	nextRing := payload.CurrentRing + 1
-	runAt := time.Now().Add(s.config.JobQueueInterval)
+	runAt := time.Now().Add(s.config.WaveSearchInterval)
 	nextRetryCount := payload.RetryCount
 
 	if nextRing > s.config.maxKRings {

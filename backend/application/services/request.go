@@ -8,6 +8,7 @@ import (
 
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
+
 	"github.com/oklog/ulid/v2"
 	"github.com/uber/h3-go/v4"
 	"go.uber.org/zap"
@@ -152,10 +153,8 @@ func (s *requestService) SubmitRequest(ctx context.Context, userID, bloodType, d
 	}
 
 	payload := domain.WaveSearchPayload{
-		RequestID:         reqID,
-		CurrentRing:       1,
-		CenterHex:         hex,
-		UsersLeftToSearch: count,
+		RequestID:   reqID,
+		CurrentRing: 1,
 	}
 	payloadBytes, _ := json.Marshal(payload)
 

@@ -32,8 +32,7 @@ type Job struct {
 
 // WaveSearchPayload represents the JSON payload stored in Job.Payload
 type WaveSearchPayload struct {
-	RequestID         string `json:"request_id"`
-	CurrentRing       int    `json:"current_ring"`
-	CenterHex         string `json:"center_hex"`
-	RetryCount        int    `json:"retry_count"`
+	RequestID   string `json:"request_id"`
+	CurrentRing int    `json:"current_ring"`
+	RetryCount  int    `json:"retry_count"`
 }

@@ -174,7 +174,7 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		zap.Int("users_left_to_search", usersLeftToSearch),
 	)
 
-	centerCell := h3.Cell(h3.IndexFromString(payload.CenterHex))
+	centerCell := h3.Cell(h3.IndexFromString(req.LocationHex))
 	ringHexes, err := s.getRingHexes(centerCell, payload.CurrentRing)
 	if err != nil {
 		return err
@@ -318,7 +318,6 @@ func (s *jobWorkerService) scheduleNextWaveSearch(ctx context.Context, job *doma
 	nextPayload := domain.WaveSearchPayload{
 		RequestID:   req.ID,
 		CurrentRing: nextRing,
-		CenterHex:   payload.CenterHex,
 		RetryCount:  nextRetryCount,
 	}
 	nextPayloadBytes, _ := json.Marshal(nextPayload)

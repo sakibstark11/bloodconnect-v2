@@ -10,7 +10,6 @@ import (
 
 type dummyNotificationSender struct{}
 
-// NewNotificationSender creates a dummy sender that just logs to stdout.
 func NewNotificationSender() application.NotificationSender {
 	return &dummyNotificationSender{}
 }

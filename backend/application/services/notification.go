@@ -10,8 +10,8 @@ import (
 )
 
 type NotificationService interface {
-	Submit(ctx context.Context, notifType domain.NotificationType, recipient, title, content string) (string, error)
-	GetForUser(ctx context.Context, userID string, page, pageSize int) ([]domain.Notification, int, error)
+	Submit(ctx context.Context, notifType domain.NotificationType, recipient domain.UserID, title, content string) (domain.NotificationID, error)
+	GetForUser(ctx context.Context, userID domain.UserID, page, pageSize int) ([]domain.Notification, int, error)
 }
 
 type notificationService struct {
@@ -26,8 +26,8 @@ func NewNotificationService(repo application.NotificationRepository, sender appl
 	}
 }
 
-func (s *notificationService) Submit(ctx context.Context, notifType domain.NotificationType, recipient, title, content string) (string, error) {
-	id := "notification_" + ulid.Make().String()
+func (s *notificationService) Submit(ctx context.Context, notifType domain.NotificationType, recipient domain.UserID, title, content string) (domain.NotificationID, error) {
+	id := domain.NotificationID("notification_" + ulid.Make().String())
 
 	notification := &domain.Notification{
 		ID:        id,
@@ -42,12 +42,11 @@ func (s *notificationService) Submit(ctx context.Context, notifType domain.Notif
 		return "", err
 	}
 
-	// Best-effort send — notifications are fire-and-forget
 	_ = s.sender.Send(ctx, notification)
 
 	return id, nil
 }
 
-func (s *notificationService) GetForUser(ctx context.Context, userID string, page, pageSize int) ([]domain.Notification, int, error) {
+func (s *notificationService) GetForUser(ctx context.Context, userID domain.UserID, page, pageSize int) ([]domain.Notification, int, error) {
 	return s.repo.GetNotificationsForUser(ctx, userID, page, pageSize)
 }

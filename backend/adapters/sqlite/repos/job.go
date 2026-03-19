@@ -38,10 +38,10 @@ func (q *jobQueue) FetchNextAvailable(ctx context.Context) (*domain.Job, error) 
 	return m.ToDomain(), nil
 }
 
-func (q *jobQueue) MarkStatus(ctx context.Context, id string, status domain.JobStatus) error {
-	return q.db.WithContext(ctx).Model(&models.Job{}).Where("id = ?", id).Update("status", string(status)).Error
+func (q *jobQueue) MarkStatus(ctx context.Context, id domain.JobID, status domain.JobStatus) error {
+	return q.db.WithContext(ctx).Model(&models.Job{}).Where("id = ?", string(id)).Update("status", string(status)).Error
 }
 
-func (q *jobQueue) Delete(ctx context.Context, id string) error {
-	return q.db.WithContext(ctx).Where("id = ?", id).Delete(&models.Job{}).Error
+func (q *jobQueue) Delete(ctx context.Context, id domain.JobID) error {
+	return q.db.WithContext(ctx).Where("id = ?", string(id)).Delete(&models.Job{}).Error
 }

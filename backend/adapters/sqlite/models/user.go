@@ -4,8 +4,6 @@ import (
 	"bloodconnect/application/domain"
 )
 
-// User is the complete GORM model for the "users" table, including the password.
-// This is used for database migrations and for initial user registration (Signup).
 type User struct {
 	ID        string `gorm:"primaryKey;size:64"`
 	Name      string
@@ -20,9 +18,6 @@ func (User) TableName() string {
 	return "users"
 }
 
-// Profile is a password-less GORM model for the "users" table.
-// It is used for profile retrieval and search, ensuring that security-sensitive data
-// (the hashed password) is physically absent from the mapping struct.
 type Profile struct {
 	ID        string `gorm:"primaryKey;size:64"`
 	Name      string
@@ -36,8 +31,6 @@ func (Profile) TableName() string {
 	return "users"
 }
 
-// Auth is a security-specific GORM model for the "users" table.
-// It is used exclusively during the authentication phase to fetch only the hash.
 type Auth struct {
 	ID       string `gorm:"primaryKey;column:id"`
 	Password string `gorm:"column:password"`
@@ -49,7 +42,7 @@ func (Auth) TableName() string {
 
 func (m *Profile) ToDomain() *domain.User {
 	return &domain.User{
-		ID:        m.ID,
+		ID:        domain.UserID(m.ID),
 		Name:      m.Name,
 		Email:     m.Email,
 		Phone:     m.Phone,
@@ -60,14 +53,14 @@ func (m *Profile) ToDomain() *domain.User {
 
 func (m *Auth) ToAuth() *domain.UserAuth {
 	return &domain.UserAuth{
-		UserID:   m.ID,
+		UserID:   domain.UserID(m.ID),
 		Password: m.Password,
 	}
 }
 
 func UserFromDomain(u *domain.User, hashedPassword string) *User {
 	return &User{
-		ID:        u.ID,
+		ID:        string(u.ID),
 		Name:      u.Name,
 		Email:     u.Email,
 		Password:  hashedPassword,
@@ -77,7 +70,6 @@ func UserFromDomain(u *domain.User, hashedPassword string) *User {
 	}
 }
 
-// UserHealth is the GORM model for domain.UserHealth
 type UserHealth struct {
 	UserID    string `gorm:"primaryKey;size:64"`
 	InfoType  string `gorm:"primaryKey;size:50"`
@@ -88,7 +80,7 @@ type UserHealth struct {
 
 func (m *UserHealth) ToDomain() domain.UserHealth {
 	return domain.UserHealth{
-		UserID:    m.UserID,
+		UserID:    domain.UserID(m.UserID),
 		InfoType:  domain.InfoType(m.InfoType),
 		Details:   m.Details,
 		CreatedAt: domain.ISOTimestamp(m.CreatedAt),
@@ -98,7 +90,7 @@ func (m *UserHealth) ToDomain() domain.UserHealth {
 
 func UserHealthFromDomain(h *domain.UserHealth) UserHealth {
 	return UserHealth{
-		UserID:    h.UserID,
+		UserID:    string(h.UserID),
 		InfoType:  string(h.InfoType),
 		Details:   h.Details,
 		CreatedAt: string(h.CreatedAt),
@@ -106,7 +98,6 @@ func UserHealthFromDomain(h *domain.UserHealth) UserHealth {
 	}
 }
 
-// UserLocation is the GORM model for domain.UserPreferredDonationLocation
 type UserLocation struct {
 	UserID    string `gorm:"primaryKey;size:64"`
 	Lat       float64
@@ -118,7 +109,7 @@ type UserLocation struct {
 
 func (m *UserLocation) ToDomain() *domain.UserPreferredDonationLocation {
 	return &domain.UserPreferredDonationLocation{
-		UserID:    m.UserID,
+		UserID:    domain.UserID(m.UserID),
 		Lat:       m.Lat,
 		Lng:       m.Lng,
 		H3Hex:     m.H3Hex,
@@ -129,7 +120,7 @@ func (m *UserLocation) ToDomain() *domain.UserPreferredDonationLocation {
 
 func UserLocationFromDomain(l *domain.UserPreferredDonationLocation) *UserLocation {
 	return &UserLocation{
-		UserID:    l.UserID,
+		UserID:    string(l.UserID),
 		Lat:       l.Lat,
 		Lng:       l.Lng,
 		H3Hex:     l.H3Hex,

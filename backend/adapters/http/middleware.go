@@ -15,7 +15,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// responseWriter is a custom wrapper to capture the HTTP status code
 type responseWriter struct {
 	http.ResponseWriter
 	status int
@@ -26,31 +25,25 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-// RequestLogger is a middleware that injects a Trace ID and logs HTTP requests
 func RequestLogger(logger *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			traceID := "trace_" + ulid.Make().String()
 
-			// Inject traceID into context
 			ctx := context.WithValue(r.Context(), domain.TraceIDKey, traceID)
 			r = r.WithContext(ctx)
 
-			// Create a scoped logger for this request
 			reqLogger := logger.With(
 				zap.String("trace_id", traceID),
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
 			)
 
-			// Wrap ResponseWriter to capture status code
 			rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 
-			// Execute actual handler
 			next.ServeHTTP(rw, r)
 
-			// Log completion
 			duration := time.Since(start)
 			reqLogger.Info("Completed HTTP request",
 				zap.Int("status", rw.status),
@@ -60,7 +53,6 @@ func RequestLogger(logger *zap.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-// GetTraceID pulls the trace_id from context
 func GetTraceID(ctx context.Context) string {
 	if val, ok := ctx.Value(domain.TraceIDKey).(string); ok {
 		return val
@@ -68,7 +60,6 @@ func GetTraceID(ctx context.Context) string {
 	return ""
 }
 
-// AuthMiddleware parses the Authorization header, validates the JWT, and injects the user_id into context.
 func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +95,7 @@ func AuthMiddleware(jwtSecret string) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), domain.UserIDKey, userID)
+			ctx := context.WithValue(r.Context(), domain.UserIDKey, domain.UserID(userID))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

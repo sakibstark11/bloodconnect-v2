@@ -55,7 +55,7 @@ func NewJobWorkerService(queue application.JobQueue, reqRepo application.Request
 func (s *jobWorkerService) Start(ctx context.Context) {
 	s.logger.Info("Starting background job worker...")
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(s.config.JobWorkerTickerInterval)
 		defer ticker.Stop()
 
 		for {
@@ -81,7 +81,7 @@ func (s *jobWorkerService) processNextJob(ctx context.Context) {
 		return
 	}
 
-	jobLogger := s.logger.With(zap.String("job_id", job.ID), zap.String("job_type", string(job.Type)))
+	jobLogger := s.logger.With(zap.String("job_id", string(job.ID)), zap.String("job_type", string(job.Type)))
 
 	if err := s.queue.MarkStatus(ctx, job.ID, domain.JobStatusProcessing); err != nil {
 		jobLogger.Error("Error marking job as processing", zap.Error(err))
@@ -119,7 +119,7 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 	if err != nil {
 		return err
 	}
-	reqLogger := jobLogger.With(zap.String("request_id", req.ID))
+	reqLogger := jobLogger.With(zap.String("request_id", string(req.ID)))
 
 	if req.Status != domain.RequestStatusPending {
 		reqLogger.Info("Request is not pending, skipping job", zap.String("status", string(req.Status)))
@@ -137,7 +137,7 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		return err
 	}
 
-	actionedMap := make(map[string]domain.ActionStatus)
+	actionedMap := make(map[domain.UserID]domain.ActionStatus)
 	acceptedUsers := 0
 	declinedUsers := 0
 	pendingUsers := 0
@@ -163,7 +163,7 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 	usersLeftToSearch := req.BagCount - (pendingUsers + acceptedUsers)
 	if usersLeftToSearch <= 0 {
 		reqLogger.Info("All users reached out to, waiting for responses. Scheduling response check.",
-			zap.String("payload_request_id", payload.RequestID),
+			zap.String("payload_request_id", string(payload.RequestID)),
 		)
 		return s.scheduleCheckResponses(ctx, job, req, &payload, reqLogger)
 	}
@@ -185,7 +185,12 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 		hexStrings[i] = h.String()
 	}
 
-	usersInRing, err := s.userRepo.GetEligibleUsersInHexes(ctx, hexStrings, string(req.BloodType), usersLeftToSearch)
+	actionedUserIDs := make([]domain.UserID, 0, len(actionedMap))
+	for id := range actionedMap {
+		actionedUserIDs = append(actionedUserIDs, id)
+	}
+
+	usersInRing, err := s.userRepo.GetEligibleUsersInHexes(ctx, hexStrings, req.BloodType, usersLeftToSearch, actionedUserIDs)
 	if err != nil {
 		return err
 	}
@@ -209,7 +214,7 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 
 	if usersLeftToSearch <= 0 {
 		reqLogger.Info("All users reached out to, waiting for responses. Scheduling response check.",
-			zap.String("payload_request_id", payload.RequestID),
+			zap.String("payload_request_id", string(payload.RequestID)),
 		)
 		return s.scheduleCheckResponses(ctx, job, req, &payload, reqLogger)
 	}
@@ -237,7 +242,7 @@ func (s *jobWorkerService) getRingHexes(centerCell h3.Cell, ring int) ([]h3.Cell
 	return ringHexes, nil
 }
 
-func (s *jobWorkerService) notifyUsers(ctx context.Context, users *[]domain.User, req *domain.DonationRequest, actionedMap *map[string]domain.ActionStatus, usersLeftToSearch *int, reqLogger *zap.Logger) error {
+func (s *jobWorkerService) notifyUsers(ctx context.Context, users *[]domain.User, req *domain.DonationRequest, actionedMap *map[domain.UserID]domain.ActionStatus, usersLeftToSearch *int, reqLogger *zap.Logger) error {
 	for _, u := range *users {
 		if _, ok := (*actionedMap)[u.ID]; ok {
 			continue
@@ -254,18 +259,18 @@ func (s *jobWorkerService) notifyUsers(ctx context.Context, users *[]domain.User
 			UpdatedAt:    domain.Now(),
 		}
 		if err := s.reqRepo.SaveRequestState(ctx, state); err != nil {
-			reqLogger.Error("Error saving request state", zap.Error(err), zap.String("user_id", u.ID))
+			reqLogger.Error("Error saving request state", zap.Error(err), zap.String("user_id", string(u.ID)))
 			continue
 		}
 
 		title := "Urgent: Blood Donation Request"
 		content := "Someone needs " + string(req.BloodType) + " blood near you!"
 		if _, err := s.notifService.Submit(ctx, domain.NotificationTypeDonationRequest, u.ID, title, content); err != nil {
-			reqLogger.Error("Error submitting notification", zap.Error(err), zap.String("user_id", u.ID))
+			reqLogger.Error("Error submitting notification", zap.Error(err), zap.String("user_id", string(u.ID)))
 			continue
 		}
 
-		reqLogger.Info("Notified eligible user", zap.String("notified_user_id", u.ID))
+		reqLogger.Info("Notified eligible user", zap.String("notified_user_id", string(u.ID)))
 		(*usersLeftToSearch)--
 	}
 	return nil
@@ -275,7 +280,7 @@ func (s *jobWorkerService) scheduleCheckResponses(ctx context.Context, job *doma
 	runAt := time.Now().Add(s.config.RequestAcceptanceWindow)
 
 	nextJob := &domain.Job{
-		ID:        "job_" + ulid.Make().String(),
+		ID:        domain.JobID("job_" + ulid.Make().String()),
 		Type:      domain.JobTypeCheckResponses,
 		Payload:   job.Payload,
 		Status:    domain.JobStatusPending,
@@ -322,7 +327,7 @@ func (s *jobWorkerService) scheduleNextWaveSearch(ctx context.Context, job *doma
 	}
 	nextPayloadBytes, _ := json.Marshal(nextPayload)
 	nextJob := &domain.Job{
-		ID:        "job_" + ulid.Make().String(),
+		ID:        domain.JobID("job_" + ulid.Make().String()),
 		Type:      domain.JobTypeWaveSearch,
 		Payload:   string(nextPayloadBytes),
 		Status:    domain.JobStatusPending,

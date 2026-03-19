@@ -4,7 +4,6 @@ import (
 	"bloodconnect/application/domain"
 )
 
-// Job is the GORM model for domain.Job
 type Job struct {
 	ID        string `gorm:"primaryKey;size:64"`
 	Type      string `gorm:"index;size:50"`
@@ -17,7 +16,7 @@ type Job struct {
 
 func (m *Job) ToDomain() *domain.Job {
 	return &domain.Job{
-		ID:        m.ID,
+		ID:        domain.JobID(m.ID),
 		Type:      domain.JobType(m.Type),
 		Payload:   m.Payload,
 		Status:    domain.JobStatus(m.Status),
@@ -29,7 +28,7 @@ func (m *Job) ToDomain() *domain.Job {
 
 func JobFromDomain(j *domain.Job) *Job {
 	return &Job{
-		ID:        j.ID,
+		ID:        string(j.ID),
 		Type:      string(j.Type),
 		Payload:   j.Payload,
 		Status:    string(j.Status),

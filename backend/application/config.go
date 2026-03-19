@@ -13,9 +13,10 @@ type AppConfig struct {
 	JWTSecret                string
 	DefaultPageSize          int
 	NotificationPageSize     int
+	MinimumDonationWaitDays  int
+	JobWorkerTickerInterval  time.Duration
 }
 
-// DefaultAppConfig returns the default configuration for the application
 func DefaultAppConfig() *AppConfig {
 	return &AppConfig{
 		ProcessRequestWindowDays: 7,
@@ -28,5 +29,7 @@ func DefaultAppConfig() *AppConfig {
 		JWTSecret:                "super-secret-key-change-me",
 		DefaultPageSize:          20,
 		NotificationPageSize:     10,
+		MinimumDonationWaitDays:  90,
+		JobWorkerTickerInterval:  5 * time.Second,
 	}
 }

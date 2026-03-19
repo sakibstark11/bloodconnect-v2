@@ -18,7 +18,6 @@ func NewNotificationHandler(service services.NotificationService, config *applic
 	return &NotificationHandler{service: service, config: config}
 }
 
-// RegisterRoutes registers /notifications routes (requires Auth)
 func (h *NotificationHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /", h.GetForMe)
 }
@@ -31,8 +30,8 @@ type NotificationsResponse struct {
 }
 
 func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
-	userID, _ := r.Context().Value(domain.UserIDKey).(string)
-	if userID == "" {
+	userID, ok := r.Context().Value(domain.UserIDKey).(domain.UserID)
+	if !ok || userID == "" {
 		RespondJSONError(w, http.StatusUnauthorized, "Unauthorized", nil)
 		return
 	}

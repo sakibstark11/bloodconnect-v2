@@ -7,6 +7,7 @@ import (
 
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
+
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/oklog/ulid/v2"
 	"github.com/uber/h3-go/v4"
@@ -14,7 +15,7 @@ import (
 )
 
 type UserService interface {
-	Signup(ctx context.Context, name, email, password, phone string) (string, error)
+	Signup(ctx context.Context, name, email, password, phone string) (domain.UserID, error)
 	Login(ctx context.Context, email, password string) (string, *domain.User, error)
 	GetMe(ctx context.Context) (*domain.User, error)
 	UpdateHealth(ctx context.Context, infoType domain.InfoType, details string) error
@@ -30,8 +31,8 @@ func NewUserService(repo application.UserRepository, config *application.AppConf
 	return &userService{repo: repo, config: config}
 }
 
-func (s *userService) Signup(ctx context.Context, name, email, password, phone string) (string, error) {
-	id := "user_" + ulid.Make().String()
+func (s *userService) Signup(ctx context.Context, name, email, password, phone string) (domain.UserID, error) {
+	id := domain.UserID("user_" + ulid.Make().String())
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -42,7 +43,7 @@ func (s *userService) Signup(ctx context.Context, name, email, password, phone s
 		ID:        id,
 		Name:      name,
 		Email:     email,
-		Phone:     phone, // Assuming 'phone' was intended here, as 'lng' is not in Signup signature.
+		Phone:     phone,
 		CreatedAt: domain.Now(),
 		UpdatedAt: domain.Now(),
 	}
@@ -55,7 +56,7 @@ func (s *userService) Signup(ctx context.Context, name, email, password, phone s
 }
 
 func (s *userService) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
-	// 1. Fetch only security credentials
+
 	userAuth, err := s.repo.GetUserAuthByEmail(ctx, email)
 	if err != nil {
 		return "", nil, err
@@ -64,12 +65,10 @@ func (s *userService) Login(ctx context.Context, email, password string) (string
 		return "", nil, errors.New("invalid credentials")
 	}
 
-	// 2. Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(userAuth.Password), []byte(password)); err != nil {
 		return "", nil, errors.New("invalid credentials")
 	}
 
-	// 3. Fetch public profile (no password)
 	user, err := s.repo.GetUserByID(ctx, userAuth.UserID)
 	if err != nil {
 		return "", nil, err
@@ -83,9 +82,9 @@ func (s *userService) Login(ctx context.Context, email, password string) (string
 	return token, user, nil
 }
 
-func (s *userService) generateToken(userID string) (string, error) {
+func (s *userService) generateToken(userID domain.UserID) (string, error) {
 	claims := jwt.MapClaims{
-		"user_id": userID,
+		"user_id": string(userID),
 		"exp":     time.Now().Add(24 * time.Hour).Unix(),
 	}
 
@@ -93,18 +92,16 @@ func (s *userService) generateToken(userID string) (string, error) {
 	return token.SignedString([]byte(s.config.JWTSecret))
 }
 
-// GetMe returns the currently authenticated user (ID read from context).
 func (s *userService) GetMe(ctx context.Context) (*domain.User, error) {
-	userID, _ := ctx.Value(domain.UserIDKey).(string)
-	if userID == "" {
+	userID, ok := ctx.Value(domain.UserIDKey).(domain.UserID)
+	if !ok || userID == "" {
 		return nil, errors.New("unauthorized")
 	}
 	return s.repo.GetUserByID(ctx, userID)
 }
 
-// UpdateHealth updates health info for the currently authenticated user.
 func (s *userService) UpdateHealth(ctx context.Context, infoType domain.InfoType, details string) error {
-	userID, _ := ctx.Value(domain.UserIDKey).(string)
+	userID, _ := ctx.Value(domain.UserIDKey).(domain.UserID)
 
 	health := &domain.UserHealth{
 		UserID:    userID,
@@ -117,9 +114,8 @@ func (s *userService) UpdateHealth(ctx context.Context, infoType domain.InfoType
 	return s.repo.UpdateUserHealth(ctx, health)
 }
 
-// UpdateLocation updates the preferred donation location for the currently authenticated user.
 func (s *userService) UpdateLocation(ctx context.Context, lat, lng float64) error {
-	userID, _ := ctx.Value(domain.UserIDKey).(string)
+	userID, _ := ctx.Value(domain.UserIDKey).(domain.UserID)
 
 	cell, _ := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, s.config.H3HexResolution)
 	loc := &domain.UserPreferredDonationLocation{

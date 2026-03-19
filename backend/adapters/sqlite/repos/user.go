@@ -20,16 +20,16 @@ func NewUserRepository(db *gorm.DB) application.UserRepository {
 }
 
 func (r *userRepository) CreateUser(ctx context.Context, user *domain.User, hashedPassword string) error {
-	// Signup uses the full User model to store the hash
+
 	return r.db.WithContext(ctx).Create(models.UserFromDomain(user, hashedPassword)).Error
 }
 
-func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.User, error) {
+func (r *userRepository) GetUserByID(ctx context.Context, id domain.UserID) (*domain.User, error) {
 	var m models.Profile
-	// Use the Profile model for zero-leakage fetching
+
 	res := r.db.WithContext(ctx).
 		Select("id", "name", "email", "phone", "created_at", "updated_at").
-		Where("id = ?", id).
+		Where("id = ?", string(id)).
 		First(&m)
 
 	if res.Error != nil {
@@ -43,7 +43,7 @@ func (r *userRepository) GetUserByID(ctx context.Context, id string) (*domain.Us
 
 func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var m models.Profile
-	// Use the Profile model for zero-leakage fetching
+
 	res := r.db.WithContext(ctx).
 		Select("id", "name", "email", "phone", "created_at", "updated_at").
 		Where("email = ?", email).
@@ -60,7 +60,7 @@ func (r *userRepository) GetUserByEmail(ctx context.Context, email string) (*dom
 
 func (r *userRepository) GetUserAuthByEmail(ctx context.Context, email string) (*domain.UserAuth, error) {
 	var m models.Auth
-	// Select only credentials needed for auth
+
 	res := r.db.WithContext(ctx).
 		Select("id", "password").
 		Where("email = ?", email).
@@ -80,9 +80,9 @@ func (r *userRepository) UpdateUserHealth(ctx context.Context, health *domain.Us
 	return r.db.WithContext(ctx).Save(&m).Error
 }
 
-func (r *userRepository) GetUserHealth(ctx context.Context, userID string) ([]domain.UserHealth, error) {
+func (r *userRepository) GetUserHealth(ctx context.Context, userID domain.UserID) ([]domain.UserHealth, error) {
 	var ms []models.UserHealth
-	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).Find(&ms).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("user_id = ?", string(userID)).Find(&ms).Error; err != nil {
 		return nil, err
 	}
 	result := make([]domain.UserHealth, len(ms))
@@ -96,9 +96,9 @@ func (r *userRepository) UpdateUserLocation(ctx context.Context, loc *domain.Use
 	return r.db.WithContext(ctx).Save(models.UserLocationFromDomain(loc)).Error
 }
 
-func (r *userRepository) GetUserLocation(ctx context.Context, userID string) (*domain.UserPreferredDonationLocation, error) {
+func (r *userRepository) GetUserLocation(ctx context.Context, userID domain.UserID) (*domain.UserPreferredDonationLocation, error) {
 	var m models.UserLocation
-	res := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&m)
+	res := r.db.WithContext(ctx).Where("user_id = ?", string(userID)).First(&m)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -108,9 +108,18 @@ func (r *userRepository) GetUserLocation(ctx context.Context, userID string) (*d
 	return m.ToDomain(), nil
 }
 
-func (r *userRepository) GetEligibleUsersInHexes(ctx context.Context, hexes []string, bloodType string, count int) ([]domain.User, error) {
+func (r *userRepository) GetEligibleUsersInHexes(ctx context.Context, hexes []string, bloodType domain.BloodType, count int, excludedUserIDs []domain.UserID) ([]domain.User, error) {
 	var userIDs []string
-	if err := r.db.WithContext(ctx).Model(&models.UserLocation{}).Where("h3_hex IN ?", hexes).Limit(count).Pluck("user_id", &userIDs).Error; err != nil {
+	q := r.db.WithContext(ctx).Model(&models.UserLocation{}).Where("h3_hex IN ?", hexes)
+	if len(excludedUserIDs) > 0 {
+		excludedStrings := make([]string, len(excludedUserIDs))
+		for i, id := range excludedUserIDs {
+			excludedStrings[i] = string(id)
+		}
+		q = q.Where("user_id NOT IN ?", excludedStrings)
+	}
+
+	if err := q.Limit(count).Pluck("user_id", &userIDs).Error; err != nil {
 		return nil, err
 	}
 	if len(userIDs) == 0 {
@@ -119,7 +128,7 @@ func (r *userRepository) GetEligibleUsersInHexes(ctx context.Context, hexes []st
 
 	var eligibleUserIDs []string
 	if err := r.db.WithContext(ctx).Model(&models.UserHealth{}).
-		Where("user_id IN ? AND info_type = ? AND details = ?", userIDs, string(domain.InfoTypeBloodType), bloodType).
+		Where("user_id IN ? AND info_type = ? AND details = ?", userIDs, string(domain.InfoTypeBloodType), string(bloodType)).
 		Pluck("user_id", &eligibleUserIDs).Error; err != nil {
 		return nil, err
 	}

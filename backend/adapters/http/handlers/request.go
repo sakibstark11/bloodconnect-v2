@@ -20,20 +20,17 @@ func NewRequestHandler(service services.RequestService, config *application.AppC
 	return &RequestHandler{service: service, config: config}
 }
 
-// RegisterPublicRoutes registers routes that don't require authentication
 func (h *RequestHandler) RegisterPublicRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /requests", h.List)
 	mux.HandleFunc("GET /requests/{id}", h.Get)
 }
 
-// RegisterProtectedRoutes registers protected actions under /requests/
 func (h *RequestHandler) RegisterProtectedRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /", h.Submit)
 	mux.HandleFunc("POST /{id}/respond", h.Respond)
 	mux.HandleFunc("POST /{id}/cancel", h.Cancel)
 }
 
-// SubmitRequestBody is the expected body for POST /requests
 type SubmitRequestBody struct {
 	LocationLat    float64 `json:"location_lat"     validate:"required,latitude"`
 	LocationLng    float64 `json:"location_lng"     validate:"required,longitude"`
@@ -46,8 +43,8 @@ type SubmitRequestBody struct {
 }
 
 func (h *RequestHandler) Submit(w http.ResponseWriter, r *http.Request) {
-	userID, _ := r.Context().Value(domain.UserIDKey).(string)
-	if userID == "" {
+	userID, ok := r.Context().Value(domain.UserIDKey).(domain.UserID)
+	if !ok || userID == "" {
 		RespondJSONError(w, http.StatusUnauthorized, "Unauthorized", nil)
 		return
 	}
@@ -64,11 +61,10 @@ func (h *RequestHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	requiredBy, err := parseDateTime(req.RequiredByDate)
 	if err != nil {
-		RespondJSONError(w, http.StatusBadRequest, "Invalid required_by_date format (expected ISO 8601)", err.Error()) // Modified error message
+		RespondJSONError(w, http.StatusBadRequest, "Invalid required_by_date format (expected ISO 8601)", err.Error())
 		return
 	}
 
-	// Validate "n days ahead" requirement
 	minDate := time.Now().Add(time.Duration(h.config.ProcessRequestWindowDays) * 24 * time.Hour)
 	if requiredBy.Before(minDate) {
 		RespondJSONError(w, http.StatusBadRequest, fmt.Sprintf("required_by_date must be at least %d days in the future", h.config.ProcessRequestWindowDays), nil)
@@ -76,18 +72,17 @@ func (h *RequestHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, err := h.service.SubmitRequest(r.Context(),
-		userID, req.BloodType, req.Description,
+		userID, domain.BloodType(req.BloodType), req.Description,
 		req.RequesterInfo, req.LocationName, req.LocationLat, req.LocationLng,
-		req.BagCount, domain.ISOTimestamp(req.RequiredByDate)) // Modified to use req.RequiredByDate
+		req.BagCount, domain.ISOTimestamp(req.RequiredByDate))
 	if err != nil {
 		RespondJSONError(w, http.StatusInternalServerError, "Failed to submit request", err.Error())
 		return
 	}
 
-	RespondJSON(w, http.StatusAccepted, map[string]string{"id": id}) // Modified status and response body
+	RespondJSON(w, http.StatusAccepted, map[string]string{"id": string(id)})
 }
 
-// ListRequestsResponse wraps a paginated list of requests
 type ListRequestsResponse struct {
 	Requests []domain.DonationRequest `json:"requests"`
 	Total    int                      `json:"total"`
@@ -102,11 +97,11 @@ func (h *RequestHandler) List(w http.ResponseWriter, r *http.Request) {
 	if page < 1 {
 		page = 1
 	}
-	// page_size is system-defined, not user-defined
+
 	pageSize := 20
 
 	filters := application.RequestFilters{
-		BloodType:   q.Get("blood_type"),
+		BloodType:   domain.BloodType(q.Get("blood_type")),
 		Status:      q.Get("status"),
 		LocationHex: q.Get("location_hex"),
 	}
@@ -129,7 +124,7 @@ func (h *RequestHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RequestHandler) Get(w http.ResponseWriter, r *http.Request) {
-	requestID := r.PathValue("id")
+	requestID := domain.RequestID(r.PathValue("id"))
 	if requestID == "" {
 		RespondJSONError(w, http.StatusBadRequest, "Missing request ID in URL", nil)
 		return
@@ -148,13 +143,12 @@ func (h *RequestHandler) Get(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, req)
 }
 
-// RespondToRequestBody is the expected body for POST /users/me/requests/{id}/respond
 type RespondToRequestBody struct {
 	Action domain.ActionStatus `json:"action" validate:"required,oneof=Accepted Declined Donated"`
 }
 
 func (h *RequestHandler) Respond(w http.ResponseWriter, r *http.Request) {
-	requestID := r.PathValue("id")
+	requestID := domain.RequestID(r.PathValue("id"))
 	if requestID == "" {
 		RespondJSONError(w, http.StatusBadRequest, "Missing request ID in URL", nil)
 		return
@@ -179,7 +173,7 @@ func (h *RequestHandler) Respond(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RequestHandler) Cancel(w http.ResponseWriter, r *http.Request) {
-	requestID := r.PathValue("id")
+	requestID := domain.RequestID(r.PathValue("id"))
 	if requestID == "" {
 		RespondJSONError(w, http.StatusBadRequest, "Missing request ID in URL", nil)
 		return

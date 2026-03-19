@@ -21,11 +21,11 @@ func (r *notificationRepository) CreateNotification(ctx context.Context, notific
 	return r.db.WithContext(ctx).Create(models.NotificationFromDomain(notification)).Error
 }
 
-func (r *notificationRepository) GetNotificationsForUser(ctx context.Context, userID string, page, pageSize int) ([]domain.Notification, int, error) {
+func (r *notificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, page, pageSize int) ([]domain.Notification, int, error) {
 	var ms []models.Notification
 	var total int64
 
-	db := r.db.WithContext(ctx).Model(&models.Notification{}).Where("recipient = ?", userID)
+	db := r.db.WithContext(ctx).Model(&models.Notification{}).Where("recipient = ?", string(userID))
 
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err

@@ -4,8 +4,6 @@ import (
 	"bloodconnect/application/domain"
 )
 
-// Notification is the GORM model for domain.Notification
-// Notifications are one-way — no status field.
 type Notification struct {
 	ID        string `gorm:"primaryKey;size:64"`
 	Type      string `gorm:"index:idx_type_recipient;size:50"`
@@ -17,9 +15,9 @@ type Notification struct {
 
 func (m *Notification) ToDomain() *domain.Notification {
 	return &domain.Notification{
-		ID:        m.ID,
+		ID:        domain.NotificationID(m.ID),
 		Type:      domain.NotificationType(m.Type),
-		Recipient: m.Recipient,
+		Recipient: domain.UserID(m.Recipient),
 		Title:     m.Title,
 		Content:   m.Content,
 		CreatedAt: domain.ISOTimestamp(m.CreatedAt),
@@ -28,9 +26,9 @@ func (m *Notification) ToDomain() *domain.Notification {
 
 func NotificationFromDomain(n *domain.Notification) *Notification {
 	return &Notification{
-		ID:        n.ID,
+		ID:        string(n.ID),
 		Type:      string(n.Type),
-		Recipient: n.Recipient,
+		Recipient: string(n.Recipient),
 		Title:     n.Title,
 		Content:   n.Content,
 		CreatedAt: string(n.CreatedAt),

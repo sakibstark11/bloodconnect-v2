@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	// Configure Global Zap Logger
+
 	zapConfig := zap.NewProductionConfig()
 	zapConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	logger, err := zapConfig.Build()
@@ -26,7 +26,6 @@ func main() {
 	}
 	defer logger.Sync()
 
-	// Initialize Database (path is an SQLite adapter concern)
 	db, err := sqlite.SetupDatabase("bloodconnect.db")
 	if err != nil {
 		log.Fatalf("failed to initialize database: %v", err)
@@ -38,7 +37,6 @@ func main() {
 	requestRepo := repos.NewRequestRepository(db)
 	queue := repos.NewJobQueue(db)
 
-	// AppConfig contains only business-logic parameters
 	appConfig := application.DefaultAppConfig()
 
 	userService := services.NewUserService(userRepo, appConfig)
@@ -51,10 +49,8 @@ func main() {
 		log.Fatalf("failed to initialize job worker service: %v", err)
 	}
 
-	// Start Background Workers
 	workerService.Start(context.Background())
 
-	// Initialize HTTP Router (address is an HTTP adapter concern)
 	router := api_http.SetupRouter(userService, notifService, requestService, appConfig)
 	loggedRouter := api_http.RequestLogger(logger)(router)
 

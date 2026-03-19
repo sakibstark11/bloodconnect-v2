@@ -50,7 +50,6 @@ func main() {
 		},
 	}
 
-	// 1. Generate Users & Login
 	sessionsChan := make(chan userSession, maxUsers)
 	var userWg sync.WaitGroup
 	jobs := make(chan int, maxUsers)
@@ -84,7 +83,6 @@ func main() {
 		log.Fatal("No users were created. Is the server running?")
 	}
 
-	// 2. Generate Requests
 	log.Printf("Generating %d requests...", maxRequests)
 	var reqIDs []string
 	var reqMu sync.Mutex
@@ -107,7 +105,6 @@ func main() {
 	}
 	reqWg.Wait()
 
-	// 3. Random Response Phase
 	log.Printf("Simulating %d Acceptances and %d Declines...", randomAcceptance, randomDeclines)
 
 	simulateResponses(c, sessions, reqIDs, "Accepted", randomAcceptance)
@@ -135,7 +132,6 @@ func populateUser(c *client, index int) (userSession, error) {
 	password := "password123"
 	phone := fmt.Sprintf("+8801%d%04d", suffix%100, index%10000)
 
-	// Signup
 	signupRes, err := c.doRequest(http.MethodPost, "/users/signup", "", map[string]string{
 		"name":     fmt.Sprintf("User %d", index),
 		"email":    email,
@@ -147,7 +143,6 @@ func populateUser(c *client, index int) (userSession, error) {
 	}
 	uid := signupRes["id"].(string)
 
-	// Login to get token
 	loginRes, err := c.doRequest(http.MethodPost, "/users/login", "", map[string]string{
 		"email":    email,
 		"password": password,
@@ -158,7 +153,6 @@ func populateUser(c *client, index int) (userSession, error) {
 	token := loginRes["token"].(string)
 	session := userSession{ID: uid, Token: token}
 
-	// Update Health & Location using token
 	bType := bloodTypes[rand.Intn(len(bloodTypes))]
 	_ = c.updateHealth(session, "blood_type", bType)
 

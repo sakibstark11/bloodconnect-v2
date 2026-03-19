@@ -1,6 +1,7 @@
 package domain
 
-// NotificationType represents the type of notification
+type NotificationID string
+
 type NotificationType string
 
 const (
@@ -9,12 +10,10 @@ const (
 	NotificationTypeDonationRequestAcceptance NotificationType = "blood_donation_request_acceptance"
 )
 
-// Notification represents a message sent to a user.
-// Notifications are one-way — they are created and sent; no status is tracked.
 type Notification struct {
-	ID        string           `json:"id"`
+	ID        NotificationID   `json:"id"`
 	Type      NotificationType `json:"type"`
-	Recipient string           `json:"recipient"` // UserID
+	Recipient UserID           `json:"recipient"`
 	Title     string           `json:"title"`
 	Content   string           `json:"content"`
 	CreatedAt ISOTimestamp     `json:"created_at"`

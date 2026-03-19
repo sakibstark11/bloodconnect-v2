@@ -1,6 +1,7 @@
 package domain
 
-// JobStatus track the background processor status
+type JobID string
+
 type JobStatus string
 
 const (
@@ -8,10 +9,9 @@ const (
 	JobStatusProcessing JobStatus = "Processing"
 	JobStatusCompleted  JobStatus = "Completed"
 	JobStatusFailed     JobStatus = "Failed"
-	JobStatusDelayed    JobStatus = "Delayed" // For jobs needed far in the future
+	JobStatusDelayed    JobStatus = "Delayed"
 )
 
-// JobType represents what kind of processing this job does
 type JobType string
 
 const (
@@ -19,20 +19,18 @@ const (
 	JobTypeCheckResponses JobType = "check_responses"
 )
 
-// Job represents a background task to process, specifically donor wave searches
 type Job struct {
-	ID        string
+	ID        JobID
 	Type      JobType
-	Payload   string // JSON structure containing RequestID, CurrentRing (K), etc.
+	Payload   string
 	Status    JobStatus
-	RunAt     ISOTimestamp // When it's allowed to run next
+	RunAt     ISOTimestamp
 	CreatedAt ISOTimestamp
 	UpdatedAt ISOTimestamp
 }
 
-// WaveSearchPayload represents the JSON payload stored in Job.Payload
 type WaveSearchPayload struct {
-	RequestID   string `json:"request_id"`
-	CurrentRing int    `json:"current_ring"`
-	RetryCount  int    `json:"retry_count"`
+	RequestID   RequestID `json:"request_id"`
+	CurrentRing int       `json:"current_ring"`
+	RetryCount  int       `json:"retry_count"`
 }

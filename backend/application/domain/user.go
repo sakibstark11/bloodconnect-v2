@@ -1,10 +1,9 @@
 package domain
 
-import ()
+type UserID string
 
-// User represents a registered donor or requester
 type User struct {
-	ID        string       `json:"id"`
+	ID        UserID       `json:"id"`
 	Name      string       `json:"name"`
 	Email     string       `json:"email"`
 	Phone     string       `json:"phone"`
@@ -12,13 +11,11 @@ type User struct {
 	UpdatedAt ISOTimestamp `json:"updated_at"`
 }
 
-// UserAuth represents security credentials for a user
 type UserAuth struct {
-	UserID   string
-	Password string // Hashed
+	UserID   UserID
+	Password string
 }
 
-// InfoType represents the type of health information
 type InfoType string
 
 const (
@@ -30,18 +27,16 @@ const (
 	InfoTypeMedicalCond  InfoType = "medical_condition"
 )
 
-// UserHealth represents specific health details for a user
 type UserHealth struct {
-	UserID    string
+	UserID    UserID
 	InfoType  InfoType
 	Details   string
 	CreatedAt ISOTimestamp
 	UpdatedAt ISOTimestamp
 }
 
-// UserPreferredDonationLocation represents a user's location preference
 type UserPreferredDonationLocation struct {
-	UserID    string
+	UserID    UserID
 	Lat       float64
 	Lng       float64
 	H3Hex     string

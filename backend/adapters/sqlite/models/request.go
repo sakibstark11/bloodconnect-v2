@@ -4,7 +4,6 @@ import (
 	"bloodconnect/application/domain"
 )
 
-// Request is the GORM model for domain.DonationRequest
 type Request struct {
 	ID             string `gorm:"primaryKey;size:64"`
 	UserID         string `gorm:"index;size:64"`
@@ -24,8 +23,8 @@ type Request struct {
 
 func (m *Request) ToDomain() *domain.DonationRequest {
 	return &domain.DonationRequest{
-		ID:             m.ID,
-		UserID:         m.UserID,
+		ID:             domain.RequestID(m.ID),
+		UserID:         domain.UserID(m.UserID),
 		LocationHex:    m.LocationHex,
 		LocationLat:    m.LocationLat,
 		LocationLng:    m.LocationLng,
@@ -43,8 +42,8 @@ func (m *Request) ToDomain() *domain.DonationRequest {
 
 func RequestFromDomain(r *domain.DonationRequest) *Request {
 	return &Request{
-		ID:             r.ID,
-		UserID:         r.UserID,
+		ID:             string(r.ID),
+		UserID:         string(r.UserID),
 		LocationHex:    r.LocationHex,
 		LocationLat:    r.LocationLat,
 		LocationLng:    r.LocationLng,
@@ -60,7 +59,6 @@ func RequestFromDomain(r *domain.DonationRequest) *Request {
 	}
 }
 
-// RequestState is the GORM model for domain.RequestState
 type RequestState struct {
 	RequestID    string `gorm:"primaryKey;size:64"`
 	ActionedByID string `gorm:"primaryKey;size:64"`
@@ -71,8 +69,8 @@ type RequestState struct {
 
 func (m *RequestState) ToDomain() *domain.RequestState {
 	return &domain.RequestState{
-		RequestID:    m.RequestID,
-		ActionedByID: m.ActionedByID,
+		RequestID:    domain.RequestID(m.RequestID),
+		ActionedByID: domain.UserID(m.ActionedByID),
 		Action:       domain.ActionStatus(m.Action),
 		CreatedAt:    domain.ISOTimestamp(m.CreatedAt),
 		UpdatedAt:    domain.ISOTimestamp(m.UpdatedAt),
@@ -81,8 +79,8 @@ func (m *RequestState) ToDomain() *domain.RequestState {
 
 func RequestStateFromDomain(s *domain.RequestState) *RequestState {
 	return &RequestState{
-		RequestID:    s.RequestID,
-		ActionedByID: s.ActionedByID,
+		RequestID:    string(s.RequestID),
+		ActionedByID: string(s.ActionedByID),
 		Action:       string(s.Action),
 		CreatedAt:    string(s.CreatedAt),
 		UpdatedAt:    string(s.UpdatedAt),

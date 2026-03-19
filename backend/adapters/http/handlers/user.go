@@ -16,20 +16,17 @@ func NewUserHandler(service services.UserService) *UserHandler {
 	return &UserHandler{service: service}
 }
 
-// RegisterPublicRoutes registers routes that don't require authentication
 func (h *UserHandler) RegisterPublicRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /users/signup", h.Signup)
 	mux.HandleFunc("POST /users/login", h.Login)
 }
 
-// RegisterMeRoutes registers /users/me/* routes (requires StripPrefix /users/me)
 func (h *UserHandler) RegisterMeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /", h.GetMe)
 	mux.HandleFunc("PUT /health", h.UpdateHealth)
 	mux.HandleFunc("PUT /location", h.UpdateLocation)
 }
 
-// SignupRequest is the expected body for POST /users/signup
 type SignupRequest struct {
 	Name     string `json:"name"     validate:"required"`
 	Email    string `json:"email"    validate:"required,email"`
@@ -37,7 +34,6 @@ type SignupRequest struct {
 	Phone    string `json:"phone"    validate:"required"`
 }
 
-// SignupResponse is the response body for POST /users/signup
 type SignupResponse struct {
 	ID string `json:"id"`
 }
@@ -59,16 +55,14 @@ func (h *UserHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	RespondJSON(w, http.StatusCreated, SignupResponse{ID: id})
+	RespondJSON(w, http.StatusCreated, SignupResponse{ID: string(id)})
 }
 
-// LoginRequest is the expected body for POST /users/login
 type LoginRequest struct {
 	Email    string `json:"email"    validate:"required,email"`
 	Password string `json:"password" validate:"required"`
 }
 
-// LoginResponse is the response body for POST /users/login
 type LoginResponse struct {
 	ID    string `json:"id"`
 	Token string `json:"token"`
@@ -91,7 +85,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, LoginResponse{ID: user.ID, Token: token})
+	RespondJSON(w, http.StatusOK, LoginResponse{ID: string(user.ID), Token: token})
 }
 
 func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +97,6 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, user)
 }
 
-// UpdateHealthRequest is the expected body for PUT /users/me/health
 type UpdateHealthRequest struct {
 	InfoType domain.InfoType `json:"info_type" validate:"required"`
 	Details  string          `json:"details"   validate:"required"`
@@ -128,7 +121,6 @@ func (h *UserHandler) UpdateHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// UpdateLocationRequest is the expected body for PUT /users/me/location
 type UpdateLocationRequest struct {
 	Lat float64 `json:"lat" validate:"required,latitude"`
 	Lng float64 `json:"lng" validate:"required,longitude"`

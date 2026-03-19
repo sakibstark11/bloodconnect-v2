@@ -140,17 +140,27 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 	actionedMap := make(map[string]domain.ActionStatus)
 	acceptedUsers := 0
 	declinedUsers := 0
+	pendingUsers := 0
 	for _, u := range actionedUsers {
 		actionedMap[u.ActionedByID] = u.Action
 
 		if u.Action == domain.ActionStatusAccepted {
 			acceptedUsers++
-		} else if u.Action == domain.ActionStatusDeclined || s.shouldActionBeConsideredDormant(&u) {
+		} else if u.Action == domain.ActionStatusDeclined {
 			declinedUsers++
+		} else if s.shouldActionBeConsideredDormant(&u) {
+			declinedUsers++
+		} else {
+			pendingUsers++
 		}
 	}
 
-	usersLeftToSearch := req.BagCount - acceptedUsers
+	if acceptedUsers >= req.BagCount {
+		reqLogger.Info("All notified users have accepted the request. Stopping search.")
+		return nil
+	}
+
+	usersLeftToSearch := req.BagCount - (pendingUsers + acceptedUsers)
 	if usersLeftToSearch <= 0 {
 		reqLogger.Info("All users reached out to, waiting for responses. Scheduling response check.",
 			zap.String("payload_request_id", payload.RequestID),
@@ -279,8 +289,6 @@ func (s *jobWorkerService) scheduleCheckResponses(ctx context.Context, job *doma
 
 func (s *jobWorkerService) processCheckResponses(ctx context.Context, job *domain.Job, jobLogger *zap.Logger) error {
 	jobLogger.Info("Checking responses for request")
-	// For now, we just delegate back to processWaveSearch which handles
-	// dormant actions and finding more users if needed.
 	return s.processWaveSearch(ctx, job, jobLogger)
 }
 func (s *jobWorkerService) scheduleNextWaveSearch(ctx context.Context, job *domain.Job, req *domain.DonationRequest, payload *domain.WaveSearchPayload, reqLogger *zap.Logger) error {

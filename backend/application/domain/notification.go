@@ -10,11 +10,19 @@ const (
 	NotificationTypeDonationRequestAcceptance NotificationType = "blood_donation_request_acceptance"
 )
 
-type Notification struct {
+type NotificationForUser struct {
 	ID        NotificationID   `json:"id"`
 	Type      NotificationType `json:"type"`
-	Recipient UserID           `json:"recipient"`
 	Title     string           `json:"title"`
 	Content   string           `json:"content"`
 	CreatedAt ISOTimestamp     `json:"created_at"`
+}
+
+type Notification struct {
+	ID        NotificationID
+	Type      NotificationType
+	Recipient UserID
+	Title     string
+	Content   string
+	CreatedAt ISOTimestamp
 }

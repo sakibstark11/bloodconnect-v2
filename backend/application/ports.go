@@ -37,7 +37,7 @@ type RequestRepository interface {
 
 type NotificationRepository interface {
 	CreateNotification(ctx context.Context, notification *domain.Notification) error
-	GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error)
+	GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.NotificationForUser, error)
 }
 
 type NotificationSender interface {

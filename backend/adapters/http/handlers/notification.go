@@ -22,9 +22,9 @@ func (h *NotificationHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 type NotificationsResponse struct {
-	Notifications      []domain.Notification `json:"notifications"`
-	LastNotificationID domain.NotificationID `json:"last_notification_id,omitempty"`
-	PageSize           int                   `json:"page_size"`
+	Notifications      []domain.NotificationForUser `json:"notifications"`
+	LastNotificationID domain.NotificationID        `json:"last_notification_id,omitempty"`
+	PageSize           int                          `json:"page_size"`
 }
 
 func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +36,7 @@ func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query()
 	lastNotificationID := domain.NotificationID(q.Get("last_notification_id"))
-	pageSize := h.config.NotificationPageSize
+	pageSize := h.config.DefaultPageSize
 
 	notifications, err := h.service.GetForUser(r.Context(), userID, lastNotificationID, pageSize)
 	if err != nil {
@@ -45,7 +45,7 @@ func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if notifications == nil {
-		notifications = []domain.Notification{}
+		notifications = []domain.NotificationForUser{}
 	}
 
 	var newLastID domain.NotificationID

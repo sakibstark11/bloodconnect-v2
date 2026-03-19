@@ -6,6 +6,7 @@ import (
 	"bloodconnect/adapters/sqlite/models"
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
+
 	"gorm.io/gorm"
 )
 
@@ -21,10 +22,10 @@ func (r *notificationRepository) CreateNotification(ctx context.Context, notific
 	return r.db.WithContext(ctx).Create(models.NotificationFromDomain(notification)).Error
 }
 
-func (r *notificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error) {
-	var ms []models.Notification
+func (r *notificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.NotificationForUser, error) {
+	var ms []models.NotificationForUser
 
-	db := r.db.WithContext(ctx).Model(&models.Notification{}).Where("recipient = ?", string(userID))
+	db := r.db.WithContext(ctx).Model(&models.NotificationForUser{}).Where("recipient = ?", string(userID))
 
 	if lastNotificationID != "" {
 		db = db.Where("id < ?", string(lastNotificationID))
@@ -34,7 +35,7 @@ func (r *notificationRepository) GetNotificationsForUser(ctx context.Context, us
 		return nil, err
 	}
 
-	result := make([]domain.Notification, len(ms))
+	result := make([]domain.NotificationForUser, len(ms))
 	for i, m := range ms {
 		result[i] = *m.ToDomain()
 	}

@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"bloodconnect/application"
@@ -84,21 +83,16 @@ func (h *RequestHandler) Submit(w http.ResponseWriter, r *http.Request) {
 }
 
 type ListRequestsResponse struct {
-	Requests []domain.DonationRequest `json:"requests"`
-	Total    int                      `json:"total"`
-	Page     int                      `json:"page"`
-	PageSize int                      `json:"page_size"`
+	Requests      []domain.DonationRequest `json:"requests"`
+	LastRequestID domain.RequestID         `json:"last_request_id,omitempty"`
+	PageSize      int                      `json:"page_size"`
 }
 
 func (h *RequestHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
-	page, _ := strconv.Atoi(q.Get("page"))
-	if page < 1 {
-		page = 1
-	}
-
-	pageSize := 20
+	lastRequestID := domain.RequestID(q.Get("last_request_id"))
+	pageSize := h.config.DefaultPageSize
 
 	filters := application.RequestFilters{
 		BloodType:   domain.BloodType(q.Get("blood_type")),
@@ -106,7 +100,7 @@ func (h *RequestHandler) List(w http.ResponseWriter, r *http.Request) {
 		LocationHex: q.Get("location_hex"),
 	}
 
-	requests, total, err := h.service.ListRequests(r.Context(), filters, page, pageSize)
+	requests, err := h.service.ListRequests(r.Context(), filters, lastRequestID, pageSize)
 	if err != nil {
 		RespondJSONError(w, http.StatusInternalServerError, "Failed to list requests", err.Error())
 		return
@@ -115,11 +109,15 @@ func (h *RequestHandler) List(w http.ResponseWriter, r *http.Request) {
 		requests = []domain.DonationRequest{}
 	}
 
+	var newLastID domain.RequestID
+	if len(requests) > 0 {
+		newLastID = requests[len(requests)-1].ID
+	}
+
 	RespondJSON(w, http.StatusOK, ListRequestsResponse{
-		Requests: requests,
-		Total:    total,
-		Page:     page,
-		PageSize: pageSize,
+		Requests:      requests,
+		LastRequestID: newLastID,
+		PageSize:      pageSize,
 	})
 }
 

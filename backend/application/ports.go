@@ -28,7 +28,7 @@ type RequestRepository interface {
 	CreateRequest(ctx context.Context, req *domain.DonationRequest) error
 	UpdateRequest(ctx context.Context, req *domain.DonationRequest) error
 	GetRequestByID(ctx context.Context, id domain.RequestID) (*domain.DonationRequest, error)
-	ListRequests(ctx context.Context, filters RequestFilters, page, pageSize int) ([]domain.DonationRequest, int, error)
+	ListRequests(ctx context.Context, filters RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]domain.DonationRequest, error)
 	SaveRequestState(ctx context.Context, state *domain.RequestState) error
 	GetRequestState(ctx context.Context, requestID domain.RequestID, actionedByID domain.UserID) (*domain.RequestState, error)
 	GetActionedUsers(ctx context.Context, requestID domain.RequestID) ([]domain.RequestState, error)
@@ -37,7 +37,7 @@ type RequestRepository interface {
 
 type NotificationRepository interface {
 	CreateNotification(ctx context.Context, notification *domain.Notification) error
-	GetNotificationsForUser(ctx context.Context, userID domain.UserID, page, pageSize int) ([]domain.Notification, int, error)
+	GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error)
 }
 
 type NotificationSender interface {

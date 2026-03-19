@@ -23,9 +23,9 @@ func TestSearchFirstTrySuccess(t *testing.T) {
 
 	runWorkerOnce(ctx, ts)
 
-	n1, _, _ := ts.notifRepo.GetNotificationsForUser(ctx, u1, 1, 10)
-	n2, _, _ := ts.notifRepo.GetNotificationsForUser(ctx, u2, 1, 10)
-	n3, _, _ := ts.notifRepo.GetNotificationsForUser(ctx, u3, 1, 10)
+	n1, _ := ts.notifRepo.GetNotificationsForUser(ctx, u1, "", 10)
+	n2, _ := ts.notifRepo.GetNotificationsForUser(ctx, u2, "", 10)
+	n3, _ := ts.notifRepo.GetNotificationsForUser(ctx, u3, "", 10)
 
 	notifiedCount := 0
 	if len(n1) > 0 {

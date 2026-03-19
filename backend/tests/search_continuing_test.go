@@ -23,7 +23,7 @@ func TestSearchContinuing(t *testing.T) {
 
 	runWorkerOnce(ctx, ts)
 
-	n1, _, _ := ts.notifRepo.GetNotificationsForUser(ctx, u1, 1, 10)
+	n1, _ := ts.notifRepo.GetNotificationsForUser(ctx, u1, "", 10)
 	if len(n1) > 0 {
 		t.Errorf("Expected no notifications for u1 after Ring 1 search")
 	}
@@ -31,8 +31,8 @@ func TestSearchContinuing(t *testing.T) {
 	time.Sleep(ts.config.WaveSearchInterval + (50 * time.Millisecond))
 	runWorkerOnce(ctx, ts)
 
-	n1, _, _ = ts.notifRepo.GetNotificationsForUser(ctx, u1, 1, 10)
-	n2, _, _ := ts.notifRepo.GetNotificationsForUser(ctx, u2, 1, 10)
+	n1, _ = ts.notifRepo.GetNotificationsForUser(ctx, u1, "", 10)
+	n2, _ := ts.notifRepo.GetNotificationsForUser(ctx, u2, "", 10)
 
 	if len(n1) == 0 || len(n2) == 0 {
 		t.Errorf("Expected both users in Ring 2 to be notified, got u1:%d, u2:%d", len(n1), len(n2))

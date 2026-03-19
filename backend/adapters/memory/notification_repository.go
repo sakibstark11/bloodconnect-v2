@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"sync"
+	"sort"
 
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
@@ -26,33 +27,37 @@ func (r *InMemoryNotificationRepository) CreateNotification(ctx context.Context,
 	return nil
 }
 
-func (r *InMemoryNotificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, page, pageSize int) ([]domain.Notification, int, error) {
+func (r *InMemoryNotificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	notifs, ok := r.notifications[userID]
 	if !ok {
-		return []domain.Notification{}, 0, nil
+		return []domain.Notification{}, nil
 	}
 
-	total := len(notifs)
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	if page <= 0 {
-		page = 1
-	}
-	start := (page - 1) * pageSize
-	if start < 0 {
-		start = 0
-	}
-	if start >= total {
-		return []domain.Notification{}, total, nil
-	}
-	end := start + pageSize
-	if end > total {
-		end = total
+	// Sort by ID descending
+	sort.Slice(notifs, func(i, j int) bool {
+		return notifs[i].ID > notifs[j].ID
+	})
+
+	var result []domain.Notification
+	foundStart := lastNotificationID == ""
+	for _, n := range notifs {
+		if !foundStart {
+			if n.ID == lastNotificationID {
+				foundStart = true
+			}
+			continue
+		}
+
+		if len(result) < pageSize {
+			if lastNotificationID != "" && n.ID == lastNotificationID {
+				continue
+			}
+			result = append(result, n)
+		}
 	}
 
-	return notifs[start:end], total, nil
+	return result, nil
 }

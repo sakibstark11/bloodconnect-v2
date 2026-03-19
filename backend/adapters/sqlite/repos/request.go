@@ -33,7 +33,7 @@ func (r *requestRepository) GetRequestByID(ctx context.Context, id domain.Reques
 	return m.ToDomain(), nil
 }
 
-func (r *requestRepository) ListRequests(ctx context.Context, filters application.RequestFilters, page, pageSize int) ([]domain.DonationRequest, int, error) {
+func (r *requestRepository) ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]domain.DonationRequest, error) {
 	q := r.db.WithContext(ctx).Model(&models.Request{})
 
 	if filters.BloodType != "" {
@@ -46,29 +46,20 @@ func (r *requestRepository) ListRequests(ctx context.Context, filters applicatio
 		q = q.Where("location_hex = ?", filters.LocationHex)
 	}
 
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, 0, err
+	if lastRequestID != "" {
+		q = q.Where("id < ?", string(lastRequestID))
 	}
-
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	if page <= 0 {
-		page = 1
-	}
-	offset := (page - 1) * pageSize
 
 	var ms []models.Request
-	if err := q.Order("created_at desc").Limit(pageSize).Offset(offset).Find(&ms).Error; err != nil {
-		return nil, 0, err
+	if err := q.Order("id desc").Limit(pageSize).Find(&ms).Error; err != nil {
+		return nil, err
 	}
 
 	requests := make([]domain.DonationRequest, len(ms))
 	for i, m := range ms {
 		requests[i] = *m.ToDomain()
 	}
-	return requests, int(total), nil
+	return requests, nil
 }
 
 func (r *requestRepository) SaveRequestState(ctx context.Context, state *domain.RequestState) error {

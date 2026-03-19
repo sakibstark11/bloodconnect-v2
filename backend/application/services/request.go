@@ -20,7 +20,7 @@ type RequestService interface {
 	CancelRequest(ctx context.Context, requestID domain.RequestID) error
 	GetRequest(ctx context.Context, requestID domain.RequestID) (*domain.DonationRequest, error)
 	GetExtendedRequest(ctx context.Context, requestID domain.RequestID) (*domain.ExtendedDonationRequest, error)
-	ListRequests(ctx context.Context, filters application.RequestFilters, page, pageSize int) ([]domain.DonationRequest, int, error)
+	ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]domain.DonationRequest, error)
 }
 
 type requestService struct {
@@ -55,8 +55,8 @@ func (s *requestService) getReqLogger(ctx context.Context, requestID domain.Requ
 	return l
 }
 
-func (s *requestService) ListRequests(ctx context.Context, filters application.RequestFilters, page, pageSize int) ([]domain.DonationRequest, int, error) {
-	return s.repo.ListRequests(ctx, filters, page, pageSize)
+func (s *requestService) ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]domain.DonationRequest, error) {
+	return s.repo.ListRequests(ctx, filters, lastRequestID, pageSize)
 }
 
 func (s *requestService) GetRequest(ctx context.Context, requestID domain.RequestID) (*domain.DonationRequest, error) {

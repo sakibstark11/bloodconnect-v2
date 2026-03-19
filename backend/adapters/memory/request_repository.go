@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"sync"
+	"sort"
 
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
@@ -45,7 +46,7 @@ func (r *InMemoryRequestRepository) GetRequestByID(ctx context.Context, id domai
 	return &req, nil
 }
 
-func (r *InMemoryRequestRepository) ListRequests(ctx context.Context, filters application.RequestFilters, page, pageSize int) ([]domain.DonationRequest, int, error) {
+func (r *InMemoryRequestRepository) ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]domain.DonationRequest, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -63,26 +64,32 @@ func (r *InMemoryRequestRepository) ListRequests(ctx context.Context, filters ap
 		filtered = append(filtered, req)
 	}
 
-	total := len(filtered)
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	if page <= 0 {
-		page = 1
-	}
-	start := (page - 1) * pageSize
-	if start < 0 {
-		start = 0
-	}
-	if start >= total {
-		return []domain.DonationRequest{}, total, nil
-	}
-	end := start + pageSize
-	if end > total {
-		end = total
+	// Sort by ID descending
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].ID > filtered[j].ID
+	})
+
+	var result []domain.DonationRequest
+	foundStart := lastRequestID == ""
+	for _, req := range filtered {
+		if !foundStart {
+			if req.ID == lastRequestID {
+				foundStart = true
+			}
+			continue
+		}
+
+		if len(result) < pageSize {
+			// If we are just starting (lastRequestID == ""), include the first item.
+			// If we found the last item, include the NEXT items.
+			if lastRequestID != "" && req.ID == lastRequestID {
+				continue
+			}
+			result = append(result, req)
+		}
 	}
 
-	return filtered[start:end], total, nil
+	return result, nil
 }
 
 func (r *InMemoryRequestRepository) SaveRequestState(ctx context.Context, state *domain.RequestState) error {

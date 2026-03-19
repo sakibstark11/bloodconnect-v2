@@ -11,7 +11,7 @@ import (
 
 type NotificationService interface {
 	Submit(ctx context.Context, notifType domain.NotificationType, recipient domain.UserID, title, content string) (domain.NotificationID, error)
-	GetForUser(ctx context.Context, userID domain.UserID, page, pageSize int) ([]domain.Notification, int, error)
+	GetForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error)
 }
 
 type notificationService struct {
@@ -47,6 +47,6 @@ func (s *notificationService) Submit(ctx context.Context, notifType domain.Notif
 	return id, nil
 }
 
-func (s *notificationService) GetForUser(ctx context.Context, userID domain.UserID, page, pageSize int) ([]domain.Notification, int, error) {
-	return s.repo.GetNotificationsForUser(ctx, userID, page, pageSize)
+func (s *notificationService) GetForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error) {
+	return s.repo.GetNotificationsForUser(ctx, userID, lastNotificationID, pageSize)
 }

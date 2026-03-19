@@ -6,7 +6,6 @@ import (
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
 	"bloodconnect/application/services"
-	"strconv"
 )
 
 type NotificationHandler struct {
@@ -23,10 +22,9 @@ func (h *NotificationHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 type NotificationsResponse struct {
-	Notifications []domain.Notification `json:"notifications"`
-	Total         int                   `json:"total"`
-	Page          int                   `json:"page"`
-	PageSize      int                   `json:"page_size"`
+	Notifications      []domain.Notification `json:"notifications"`
+	LastNotificationID domain.NotificationID `json:"last_notification_id,omitempty"`
+	PageSize           int                   `json:"page_size"`
 }
 
 func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
@@ -37,13 +35,10 @@ func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := r.URL.Query()
-	page, _ := strconv.Atoi(q.Get("page"))
-	if page < 1 {
-		page = 1
-	}
+	lastNotificationID := domain.NotificationID(q.Get("last_notification_id"))
 	pageSize := h.config.NotificationPageSize
 
-	notifications, total, err := h.service.GetForUser(r.Context(), userID, page, pageSize)
+	notifications, err := h.service.GetForUser(r.Context(), userID, lastNotificationID, pageSize)
 	if err != nil {
 		RespondJSONError(w, http.StatusInternalServerError, "Failed to fetch notifications", err.Error())
 		return
@@ -52,10 +47,15 @@ func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 	if notifications == nil {
 		notifications = []domain.Notification{}
 	}
+
+	var newLastID domain.NotificationID
+	if len(notifications) > 0 {
+		newLastID = notifications[len(notifications)-1].ID
+	}
+
 	RespondJSON(w, http.StatusOK, NotificationsResponse{
-		Notifications: notifications,
-		Total:         total,
-		Page:          page,
-		PageSize:      pageSize,
+		Notifications:      notifications,
+		LastNotificationID: newLastID,
+		PageSize:           pageSize,
 	})
 }

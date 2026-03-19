@@ -21,24 +21,22 @@ func (r *notificationRepository) CreateNotification(ctx context.Context, notific
 	return r.db.WithContext(ctx).Create(models.NotificationFromDomain(notification)).Error
 }
 
-func (r *notificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, page, pageSize int) ([]domain.Notification, int, error) {
+func (r *notificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error) {
 	var ms []models.Notification
-	var total int64
 
 	db := r.db.WithContext(ctx).Model(&models.Notification{}).Where("recipient = ?", string(userID))
 
-	if err := db.Count(&total).Error; err != nil {
-		return nil, 0, err
+	if lastNotificationID != "" {
+		db = db.Where("id < ?", string(lastNotificationID))
 	}
 
-	offset := (page - 1) * pageSize
-	if err := db.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&ms).Error; err != nil {
-		return nil, 0, err
+	if err := db.Order("id desc").Limit(pageSize).Find(&ms).Error; err != nil {
+		return nil, err
 	}
 
 	result := make([]domain.Notification, len(ms))
 	for i, m := range ms {
 		result[i] = *m.ToDomain()
 	}
-	return result, int(total), nil
+	return result, nil
 }

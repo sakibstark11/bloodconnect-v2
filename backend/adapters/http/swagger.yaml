@@ -108,11 +108,11 @@ paths:
       security:
         - BearerAuth: []
       parameters:
-        - name: page
+        - name: last_notification_id
           in: query
+          description: ULID of the last notification from the previous page
           schema:
-            type: integer
-            default: 1
+            type: string
       responses:
         '200':
           description: List of notifications
@@ -186,11 +186,11 @@ paths:
           in: query
           schema:
             type: string
-        - name: page
+        - name: last_request_id
           in: query
+          description: ULID of the last request from the previous page
           schema:
-            type: integer
-            default: 1
+            type: string
       responses:
         '200':
           description: Paginated list of requests
@@ -335,8 +335,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DonationRequest'
-        total: { type: integer }
-        page: { type: integer }
+        last_request_id: { type: string }
         page_size: { type: integer }
 
     ExtendedDonationRequest:
@@ -383,8 +382,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Notification'
-        total: { type: integer }
-        page: { type: integer }
+        last_notification_id: { type: string }
         page_size: { type: integer }
 
   responses:

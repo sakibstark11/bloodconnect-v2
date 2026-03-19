@@ -34,7 +34,7 @@ func TestRevocationTrigger(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	runWorkerOnce(ctx, ts)
 
-	n3, _, _ := ts.notifRepo.GetNotificationsForUser(ctx, u3, 1, 10)
+	n3, _ := ts.notifRepo.GetNotificationsForUser(ctx, u3, "", 10)
 	if len(n3) == 0 {
 		t.Errorf("Expected User 3 to be notified after User 1 revoked their acceptance")
 	}

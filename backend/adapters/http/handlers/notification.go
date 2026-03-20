@@ -21,10 +21,28 @@ func (h *NotificationHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /", h.GetForMe)
 }
 
+type NotificationResponse struct {
+	ID        string                  `json:"id"`
+	Type      domain.NotificationType `json:"type"`
+	Title     string                  `json:"title"`
+	Content   string                  `json:"content"`
+	CreatedAt string                  `json:"created_at"`
+}
+
+func mapNotificationToResponse(n domain.Notification) NotificationResponse {
+	return NotificationResponse{
+		ID:        string(n.ID),
+		Type:      n.Type,
+		Title:     n.Title,
+		Content:   n.Content,
+		CreatedAt: string(n.CreatedAt),
+	}
+}
+
 type NotificationsResponse struct {
-	Notifications      []domain.NotificationForUser `json:"notifications"`
-	LastNotificationID domain.NotificationID        `json:"last_notification_id,omitempty"`
-	PageSize           int                          `json:"page_size"`
+	Notifications      []NotificationResponse `json:"notifications"`
+	LastNotificationID domain.NotificationID  `json:"last_notification_id,omitempty"`
+	PageSize           int                    `json:"page_size"`
 }
 
 func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +63,7 @@ func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if notifications == nil {
-		notifications = []domain.NotificationForUser{}
+		notifications = []domain.Notification{}
 	}
 
 	var newLastID domain.NotificationID
@@ -53,8 +71,13 @@ func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 		newLastID = notifications[len(notifications)-1].ID
 	}
 
+	res := make([]NotificationResponse, len(notifications))
+	for i, n := range notifications {
+		res[i] = mapNotificationToResponse(n)
+	}
+
 	RespondJSON(w, http.StatusOK, NotificationsResponse{
-		Notifications:      notifications,
+		Notifications:      res,
 		LastNotificationID: newLastID,
 		PageSize:           pageSize,
 	})

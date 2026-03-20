@@ -82,10 +82,80 @@ func (h *RequestHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusAccepted, map[string]string{"id": string(id)})
 }
 
+type DonationRequestResponse struct {
+	ID             string              `json:"id"`
+	UserID         string              `json:"user_id"`
+	LocationHex    string              `json:"location_hex"`
+	LocationLat    float64             `json:"location_lat"`
+	LocationLng    float64             `json:"location_lng"`
+	BagCount       int                 `json:"bag_count"`
+	RequiredByDate string              `json:"required_by_date"`
+	BloodType      domain.BloodType    `json:"blood_type"`
+	Description    string              `json:"description"`
+	RequesterInfo  string              `json:"requester_info"`
+	LocationName   string              `json:"location_name"`
+	Status         domain.RequestStatus `json:"status"`
+	CreatedAt      string              `json:"created_at"`
+	UpdatedAt      string              `json:"updated_at"`
+}
+
+func mapDonationRequestToResponse(req domain.DonationRequest) DonationRequestResponse {
+	return DonationRequestResponse{
+		ID:             string(req.ID),
+		UserID:         string(req.UserID),
+		LocationHex:    req.LocationHex,
+		LocationLat:    req.LocationLat,
+		LocationLng:    req.LocationLng,
+		BagCount:       req.BagCount,
+		RequiredByDate: string(req.RequiredByDate),
+		BloodType:      req.BloodType,
+		Description:    req.Description,
+		RequesterInfo:  req.RequesterInfo,
+		LocationName:   req.LocationName,
+		Status:         req.Status,
+		CreatedAt:      string(req.CreatedAt),
+		UpdatedAt:      string(req.UpdatedAt),
+	}
+}
+
+type RequestActionedUserResponse struct {
+	UserID string              `json:"user_id"`
+	Lat    float64             `json:"lat"`
+	Lng    float64             `json:"lng"`
+	H3Hex  string              `json:"h3_hex"`
+	Action domain.ActionStatus `json:"action"`
+}
+
+func mapRequestActionedUserToResponse(u domain.RequestActionedUser) RequestActionedUserResponse {
+	return RequestActionedUserResponse{
+		UserID: string(u.UserID),
+		Lat:    u.Lat,
+		Lng:    u.Lng,
+		H3Hex:  u.H3Hex,
+		Action: u.Action,
+	}
+}
+
+type ExtendedDonationRequestResponse struct {
+	Request       DonationRequestResponse       `json:"request"`
+	NotifiedUsers []RequestActionedUserResponse `json:"notified_users"`
+}
+
+func mapExtendedDonationRequestToResponse(req *domain.ExtendedDonationRequest) ExtendedDonationRequestResponse {
+	notifiedUsers := make([]RequestActionedUserResponse, len(req.NotifiedUsers))
+	for i, u := range req.NotifiedUsers {
+		notifiedUsers[i] = mapRequestActionedUserToResponse(u)
+	}
+	return ExtendedDonationRequestResponse{
+		Request:       mapDonationRequestToResponse(*req.Request),
+		NotifiedUsers: notifiedUsers,
+	}
+}
+
 type ListRequestsResponse struct {
-	Requests      []domain.DonationRequest `json:"requests"`
-	LastRequestID domain.RequestID         `json:"last_request_id,omitempty"`
-	PageSize      int                      `json:"page_size"`
+	Requests      []DonationRequestResponse `json:"requests"`
+	LastRequestID domain.RequestID          `json:"last_request_id,omitempty"`
+	PageSize      int                       `json:"page_size"`
 }
 
 func (h *RequestHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -114,8 +184,13 @@ func (h *RequestHandler) List(w http.ResponseWriter, r *http.Request) {
 		newLastID = requests[len(requests)-1].ID
 	}
 
+	res := make([]DonationRequestResponse, len(requests))
+	for i, r := range requests {
+		res[i] = mapDonationRequestToResponse(r)
+	}
+
 	RespondJSON(w, http.StatusOK, ListRequestsResponse{
-		Requests:      requests,
+		Requests:      res,
 		LastRequestID: newLastID,
 		PageSize:      pageSize,
 	})
@@ -138,7 +213,7 @@ func (h *RequestHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	RespondJSON(w, http.StatusOK, req)
+	RespondJSON(w, http.StatusOK, mapExtendedDonationRequestToResponse(req))
 }
 
 type RespondToRequestBody struct {

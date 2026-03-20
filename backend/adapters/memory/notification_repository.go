@@ -11,36 +11,29 @@ import (
 
 type InMemoryNotificationRepository struct {
 	mu            sync.RWMutex
-	notifications map[domain.UserID][]domain.NotificationForUser
+	notifications map[domain.UserID][]domain.Notification
 }
 
 func NewNotificationRepository() application.NotificationRepository {
 	return &InMemoryNotificationRepository{
-		notifications: make(map[domain.UserID][]domain.NotificationForUser),
+		notifications: make(map[domain.UserID][]domain.Notification),
 	}
 }
 
 func (r *InMemoryNotificationRepository) CreateNotification(ctx context.Context, n *domain.Notification) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	notificationForUser := &domain.NotificationForUser{
-		ID:        n.ID,
-		Type:      n.Type,
-		Title:     n.Title,
-		Content:   n.Content,
-		CreatedAt: n.CreatedAt,
-	}
-	r.notifications[n.Recipient] = append(r.notifications[n.Recipient], *notificationForUser)
+	r.notifications[n.Recipient] = append(r.notifications[n.Recipient], *n)
 	return nil
 }
 
-func (r *InMemoryNotificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.NotificationForUser, error) {
+func (r *InMemoryNotificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	notifs, ok := r.notifications[userID]
 	if !ok {
-		return []domain.NotificationForUser{}, nil
+		return []domain.Notification{}, nil
 	}
 
 	// Sort by ID descending
@@ -48,7 +41,7 @@ func (r *InMemoryNotificationRepository) GetNotificationsForUser(ctx context.Con
 		return notifs[i].ID > notifs[j].ID
 	})
 
-	var result []domain.NotificationForUser
+	var result []domain.Notification
 	foundStart := lastNotificationID == ""
 	for _, n := range notifs {
 		if !foundStart {

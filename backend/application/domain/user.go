@@ -3,12 +3,12 @@ package domain
 type UserID string
 
 type User struct {
-	ID        UserID       `json:"id"`
-	Name      string       `json:"name"`
-	Email     string       `json:"email"`
-	Phone     string       `json:"phone"`
-	CreatedAt ISOTimestamp `json:"created_at"`
-	UpdatedAt ISOTimestamp `json:"updated_at"`
+	ID        UserID
+	Name      string
+	Email     string
+	Phone     string
+	CreatedAt ISOTimestamp
+	UpdatedAt ISOTimestamp
 }
 
 type UserAuth struct {

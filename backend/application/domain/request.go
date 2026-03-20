@@ -32,33 +32,33 @@ const (
 )
 
 type DonationRequest struct {
-	ID             RequestID     `json:"id"`
-	UserID         UserID        `json:"user_id"`
-	LocationHex    string        `json:"location_hex"`
-	LocationLat    float64       `json:"location_lat"`
-	LocationLng    float64       `json:"location_lng"`
-	BagCount       int           `json:"bag_count"`
-	RequiredByDate ISOTimestamp  `json:"required_by_date"`
-	BloodType      BloodType     `json:"blood_type"`
-	Description    string        `json:"description"`
-	RequesterInfo  string        `json:"requester_info"`
-	LocationName   string        `json:"location_name"`
-	Status         RequestStatus `json:"status"`
-	CreatedAt      ISOTimestamp  `json:"created_at"`
-	UpdatedAt      ISOTimestamp  `json:"updated_at"`
+	ID             RequestID
+	UserID         UserID
+	LocationHex    string
+	LocationLat    float64
+	LocationLng    float64
+	BagCount       int
+	RequiredByDate ISOTimestamp
+	BloodType      BloodType
+	Description    string
+	RequesterInfo  string
+	LocationName   string
+	Status         RequestStatus
+	CreatedAt      ISOTimestamp
+	UpdatedAt      ISOTimestamp
 }
 
 type RequestActionedUser struct {
-	UserID UserID       `json:"user_id"`
-	Lat    float64      `json:"lat"`
-	Lng    float64      `json:"lng"`
-	H3Hex  string       `json:"h3_hex"`
-	Action ActionStatus `json:"action"`
+	UserID UserID
+	Lat    float64
+	Lng    float64
+	H3Hex  string
+	Action ActionStatus
 }
 
 type ExtendedDonationRequest struct {
-	Request       *DonationRequest      `json:"request"`
-	NotifiedUsers []RequestActionedUser `json:"notified_users"`
+	Request       *DonationRequest
+	NotifiedUsers []RequestActionedUser
 }
 
 type ActionStatus string

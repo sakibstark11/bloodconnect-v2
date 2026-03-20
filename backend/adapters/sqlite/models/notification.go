@@ -17,27 +17,6 @@ func (Notification) TableName() string {
 	return "notifications"
 }
 
-type NotificationForUser struct {
-	ID        string `gorm:"primaryKey;size:64"`
-	Type      string `gorm:"index:idx_type_recipient;size:50"`
-	Title     string
-	Content   string
-	CreatedAt string `gorm:"size:25"`
-}
-
-func (NotificationForUser) TableName() string {
-	return "notifications"
-}
-
-func (m *NotificationForUser) ToDomain() *domain.NotificationForUser {
-	return &domain.NotificationForUser{
-		ID:        domain.NotificationID(m.ID),
-		Type:      domain.NotificationType(m.Type),
-		Title:     m.Title,
-		Content:   m.Content,
-		CreatedAt: domain.ISOTimestamp(m.CreatedAt),
-	}
-}
 func (m *Notification) ToDomain() *domain.Notification {
 	return &domain.Notification{
 		ID:        domain.NotificationID(m.ID),

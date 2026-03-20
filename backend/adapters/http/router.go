@@ -25,10 +25,11 @@ func SetupRouter(
 	rh := handlers.NewRequestHandler(requestService, config)
 
 	uh.RegisterPublicRoutes(mux)
-	mux.HandleFunc("GET /requests", rh.List)
-	mux.HandleFunc("GET /requests/{id}", rh.Get)
 
 	auth := AuthMiddleware(config.JWTSecret)
+
+	mux.Handle("GET /requests", auth(http.HandlerFunc(rh.List)))
+	mux.Handle("GET /requests/{id}", auth(http.HandlerFunc(rh.Get)))
 
 	mux.Handle("GET /users/me", auth(http.HandlerFunc(uh.GetMe)))
 	mux.Handle("PUT /users/me/health", auth(http.HandlerFunc(uh.UpdateHealth)))

@@ -173,6 +173,8 @@ paths:
     get:
       summary: List blood donation requests with filters
       tags: [Requests]
+      security:
+        - BearerAuth: []
       parameters:
         - name: blood_type
           in: query
@@ -201,6 +203,8 @@ paths:
     post:
       summary: Create a new blood donation request
       tags: [Requests]
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -221,6 +225,8 @@ paths:
     get:
       summary: Get details of a specific donation request
       tags: [Requests]
+      security:
+        - BearerAuth: []
       parameters:
         - name: id
           in: path

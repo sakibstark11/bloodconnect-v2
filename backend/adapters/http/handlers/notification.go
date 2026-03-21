@@ -26,6 +26,7 @@ type NotificationResponse struct {
 	Type      domain.NotificationType `json:"type"`
 	Title     string                  `json:"title"`
 	Content   string                  `json:"content"`
+	Metadata  any                     `json:"metadata"`
 	CreatedAt string                  `json:"created_at"`
 }
 
@@ -35,6 +36,7 @@ func mapNotificationToResponse(n domain.Notification) NotificationResponse {
 		Type:      n.Type,
 		Title:     n.Title,
 		Content:   n.Content,
+		Metadata:  n.Metadata,
 		CreatedAt: string(n.CreatedAt),
 	}
 }

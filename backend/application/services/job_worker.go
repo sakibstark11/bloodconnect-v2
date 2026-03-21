@@ -265,7 +265,8 @@ func (s *jobWorkerService) notifyUsers(ctx context.Context, users *[]domain.User
 
 		title := "Urgent: Blood Donation Request"
 		content := "Someone needs " + string(req.BloodType) + " blood near you!"
-		if _, err := s.notifService.Submit(ctx, domain.NotificationTypeDonationRequest, u.ID, title, content); err != nil {
+		metadata := domain.DonationRequestMetadata{RequestID: string(req.ID)}
+		if _, err := s.notifService.Submit(ctx, domain.NotificationTypeDonationRequest, u.ID, title, content, metadata); err != nil {
 			reqLogger.Error("Error submitting notification", zap.Error(err), zap.String("user_id", string(u.ID)))
 			continue
 		}

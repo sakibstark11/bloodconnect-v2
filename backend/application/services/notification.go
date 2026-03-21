@@ -10,7 +10,7 @@ import (
 )
 
 type NotificationService interface {
-	Submit(ctx context.Context, notifType domain.NotificationType, recipient domain.UserID, title, content string) (domain.NotificationID, error)
+	Submit(ctx context.Context, notifType domain.NotificationType, recipient domain.UserID, title, content string, metadata domain.NotificationMetadata) (domain.NotificationID, error)
 	GetForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error)
 }
 
@@ -26,7 +26,7 @@ func NewNotificationService(repo application.NotificationRepository, sender appl
 	}
 }
 
-func (s *notificationService) Submit(ctx context.Context, notifType domain.NotificationType, recipient domain.UserID, title, content string) (domain.NotificationID, error) {
+func (s *notificationService) Submit(ctx context.Context, notifType domain.NotificationType, recipient domain.UserID, title, content string, metadata domain.NotificationMetadata) (domain.NotificationID, error) {
 	id := domain.NotificationID("notification_" + ulid.Make().String())
 
 	notification := &domain.Notification{
@@ -35,6 +35,7 @@ func (s *notificationService) Submit(ctx context.Context, notifType domain.Notif
 		Recipient: recipient,
 		Title:     title,
 		Content:   content,
+		Metadata:  metadata,
 		CreatedAt: domain.Now(),
 	}
 

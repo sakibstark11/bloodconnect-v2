@@ -332,7 +332,14 @@ components:
         bag_count: { type: integer }
         status: { type: string }
         location_name: { type: string }
+        location_hex: { type: string }
+        location_lat: { type: number }
+        location_lng: { type: number }
+        required_by_date: { type: string, format: date-time }
+        description: { type: string }
+        requester_info: { type: string }
         created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     ListRequestsResponse:
       type: object
@@ -378,6 +385,7 @@ components:
         type: { type: string }
         title: { type: string }
         content: { type: string }
+        metadata: { type: object }
         created_at: { type: string, format: date-time }
 
     NotificationsResponse:

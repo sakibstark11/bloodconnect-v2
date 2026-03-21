@@ -1,21 +1,65 @@
-import { Button } from "@/components/ui/button"
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import HomePage from './pages/HomePage';
+import LoginPage from './pages/LoginPage';
+import RequestsPage from './pages/RequestsPage';
+import RequestDetailsPage from './pages/RequestDetailsPage';
+import ProfilePage from './pages/ProfilePage';
+import SignupPage from './pages/SignupPage';
+import NotFoundPage from './pages/NotFoundPage';
+import ProtectedRoute from './components/ProtectedRoute';
+import AppLayout from './components/AppLayout';
+import { ThemeProvider } from "@/components/ThemeProvider";
 
-export function App() {
+const router = createBrowserRouter([
+  {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/signup',
+    element: <SignupPage />,
+  },
+  {
+    element: <ProtectedRoute />,
+    children: [
+      {
+        element: <AppLayout />,
+        children: [
+          {
+            path: '/',
+            element: <HomePage />,
+          },
+          {
+            path: '/requests',
+            element: <RequestsPage />,
+          },
+          {
+            path: '/requests/:id',
+            element: <RequestDetailsPage />,
+          },
+          {
+            path: '/users/:id',
+            element: <ProfilePage />,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    path: '*',
+    element: <NotFoundPage />,
+  },
+]);
+
+function App() {
   return (
-    <div className="flex min-h-svh p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
-        <div>
-          <h1 className="font-medium">Project ready!</h1>
-          <p>You may now add components and start building.</p>
-          <p>We&apos;ve already added the button component for you.</p>
-          <Button className="mt-2">Button</Button>
-        </div>
-        <div className="font-mono text-xs text-muted-foreground">
-          (Press <kbd>d</kbd> to toggle dark mode)
-        </div>
-      </div>
-    </div>
-  )
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>
+    </ThemeProvider>
+  );
 }
 
-export default App
+export default App;

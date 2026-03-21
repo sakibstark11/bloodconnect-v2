@@ -238,6 +238,10 @@ func (h *RequestHandler) Respond(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.RespondToRequest(r.Context(), requestID, req.Action); err != nil {
+		if err == domain.ErrDonationWaitPeriodNotMet {
+			RespondJSONError(w, http.StatusBadRequest, "Eligibility check failed", err.Error())
+			return
+		}
 		RespondJSONError(w, http.StatusInternalServerError, "Failed to respond to request", err.Error())
 		return
 	}

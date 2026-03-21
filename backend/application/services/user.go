@@ -17,7 +17,7 @@ import (
 type UserService interface {
 	Signup(ctx context.Context, name, email, password, phone string) (domain.UserID, error)
 	Login(ctx context.Context, email, password string) (string, *domain.User, error)
-	GetMe(ctx context.Context) (*domain.User, error)
+	GetMe(ctx context.Context) (*domain.User, []domain.UserHealth, error)
 	UpdateHealth(ctx context.Context, infoType domain.InfoType, details string) error
 	UpdateLocation(ctx context.Context, lat, lng float64) error
 }
@@ -92,16 +92,38 @@ func (s *userService) generateToken(userID domain.UserID) (string, error) {
 	return token.SignedString([]byte(s.config.JWTSecret))
 }
 
-func (s *userService) GetMe(ctx context.Context) (*domain.User, error) {
+func (s *userService) GetMe(ctx context.Context) (*domain.User, []domain.UserHealth, error) {
 	userID, ok := ctx.Value(domain.UserIDKey).(domain.UserID)
 	if !ok || userID == "" {
-		return nil, errors.New("unauthorized")
+		return nil, nil, domain.ErrUnauthorized
 	}
-	return s.repo.GetUserByID(ctx, userID)
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if user == nil {
+		return nil, nil, domain.ErrUserNotFound
+	}
+	health, err := s.repo.GetUserHealth(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return user, health, nil
 }
 
 func (s *userService) UpdateHealth(ctx context.Context, infoType domain.InfoType, details string) error {
 	userID, _ := ctx.Value(domain.UserIDKey).(domain.UserID)
+
+	if infoType == domain.InfoTypeBloodType {
+		health, err := s.repo.GetUserHealth(ctx, userID)
+		if err == nil {
+			for _, h := range health {
+				if h.InfoType == domain.InfoTypeBloodType && h.Details != "" {
+					return domain.ErrBloodTypeUpdateDenied
+				}
+			}
+		}
+	}
 
 	health := &domain.UserHealth{
 		UserID:    userID,

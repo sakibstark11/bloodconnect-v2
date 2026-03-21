@@ -11,4 +11,4 @@ COPY . .
 EXPOSE 5173
 
 # Run the dev server
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "dev", "--", "--port", "5173", "--host", "0.0.0.0"]

@@ -68,21 +68,36 @@ type LoginResponse struct {
 	Token string `json:"token"`
 }
 
-type UserResponse struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	Phone     string `json:"phone"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+type UserHealthResponse struct {
+	InfoType string `json:"info_type"`
+	Details  string `json:"details"`
 }
 
-func mapUserToResponse(u *domain.User) UserResponse {
+type UserResponse struct {
+	ID        string               `json:"id"`
+	Name      string               `json:"name"`
+	Email     string               `json:"email"`
+	Phone     string               `json:"phone"`
+	Health     []UserHealthResponse `json:"health,omitempty"`
+	CreatedAt string               `json:"created_at"`
+	UpdatedAt string               `json:"updated_at"`
+}
+
+func mapUserToResponse(u *domain.User, health []domain.UserHealth) UserResponse {
+	healthRes := make([]UserHealthResponse, len(health))
+	for i, h := range health {
+		healthRes[i] = UserHealthResponse{
+			InfoType: string(h.InfoType),
+			Details:  h.Details,
+		}
+	}
+
 	return UserResponse{
 		ID:        string(u.ID),
 		Name:      u.Name,
 		Email:     u.Email,
 		Phone:     u.Phone,
+		Health:    healthRes,
 		CreatedAt: string(u.CreatedAt),
 		UpdatedAt: string(u.UpdatedAt),
 	}
@@ -109,12 +124,16 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
-	user, err := h.service.GetMe(r.Context())
+	user, health, err := h.service.GetMe(r.Context())
 	if err != nil {
-		RespondJSONError(w, http.StatusUnauthorized, "Unauthorized", nil)
+		if err == domain.ErrUnauthorized {
+			RespondJSONError(w, http.StatusUnauthorized, "Unauthorized", nil)
+			return
+		}
+		RespondJSONError(w, http.StatusInternalServerError, "Failed to get user info", err.Error())
 		return
 	}
-	RespondJSON(w, http.StatusOK, mapUserToResponse(user))
+	RespondJSON(w, http.StatusOK, mapUserToResponse(user, health))
 }
 
 type UpdateHealthRequest struct {

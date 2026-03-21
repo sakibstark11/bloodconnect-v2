@@ -185,14 +185,30 @@ func (s *requestService) RespondToRequest(ctx context.Context, requestID domain.
 
 	if action == domain.ActionStatusAccepted {
 		since := time.Now().Add(-time.Duration(s.config.MinimumDonationWaitDays) * 24 * time.Hour)
-		recentActions, err := s.repo.GetUserRecentActions(ctx, userID, domain.ActionStatusAccepted, domain.ISOTimestamp(since.Format("2006-01-02T15:04:05.000Z")))
+		sinceISO := domain.ISOTimestamp(since.Format("2006-01-02T15:04:05.000Z"))
+
+		// Check recent accepted actions
+		recentActions, err := s.repo.GetUserRecentActions(ctx, userID, domain.ActionStatusAccepted, sinceISO)
 		if err != nil {
 			reqLogger.Error("Failed to check recent actions", zap.Error(err))
 		} else {
-
 			for _, ra := range recentActions {
 				if ra.RequestID != requestID {
-					return errors.New("you cannot accept another request within the minimum donation wait period")
+					return domain.ErrDonationWaitPeriodNotMet
+				}
+			}
+		}
+
+		// Check last_donation_date in user health
+		health, err := s.userRepo.GetUserHealth(ctx, userID)
+		if err == nil {
+			for _, h := range health {
+				if h.InfoType == domain.InfoTypeLastDonation {
+					// Use a flexible layout for h3 cells, but the date is stored in Details
+					lastDonated, err := time.Parse("2006-01-02", h.Details)
+					if err == nil && lastDonated.After(since) {
+						return domain.ErrDonationWaitPeriodNotMet
+					}
 				}
 			}
 		}
@@ -222,7 +238,8 @@ func (s *requestService) RespondToRequest(ctx context.Context, requestID domain.
 		if err == nil && req != nil {
 			title := "Donation Request Accepted"
 			content := "A user has accepted your request to donate blood."
-			_, _ = s.notifService.Submit(ctx, domain.NotificationTypeDonationRequestAcceptance, req.UserID, title, content)
+			metadata := domain.DonationAcceptanceMetadata{RequestID: string(requestID), DonorID: string(userID)}
+			_, _ = s.notifService.Submit(ctx, domain.NotificationTypeDonationRequestAcceptance, req.UserID, title, content, metadata)
 		}
 	}
 

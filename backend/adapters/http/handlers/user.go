@@ -78,7 +78,7 @@ type UserResponse struct {
 	Name      string               `json:"name"`
 	Email     string               `json:"email"`
 	Phone     string               `json:"phone"`
-	Health     []UserHealthResponse `json:"health,omitempty"`
+	Health    []UserHealthResponse `json:"health,omitempty"`
 	CreatedAt string               `json:"created_at"`
 	UpdatedAt string               `json:"updated_at"`
 }

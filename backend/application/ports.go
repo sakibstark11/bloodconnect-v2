@@ -32,7 +32,7 @@ type RequestRepository interface {
 	SaveRequestState(ctx context.Context, state *domain.RequestState) error
 	GetRequestState(ctx context.Context, requestID domain.RequestID, actionedByID domain.UserID) (*domain.RequestState, error)
 	GetActionedUsers(ctx context.Context, requestID domain.RequestID) ([]domain.RequestState, error)
-	GetUserRecentActions(ctx context.Context, userID domain.UserID, action domain.ActionStatus, since domain.ISOTimestamp) ([]domain.RequestState, error)
+	GetUserRecentActions(ctx context.Context, userID domain.UserID, actions []domain.ActionStatus, since domain.ISOTimestamp) ([]domain.RequestState, error)
 }
 
 type NotificationRepository interface {
@@ -49,4 +49,5 @@ type JobQueue interface {
 	FetchNextAvailable(ctx context.Context) (*domain.Job, error)
 	MarkStatus(ctx context.Context, id domain.JobID, status domain.JobStatus) error
 	Delete(ctx context.Context, id domain.JobID) error
+	Consume(ctx context.Context, jobType domain.JobType) (<-chan *domain.Job, error)
 }

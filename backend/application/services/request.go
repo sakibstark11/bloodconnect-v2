@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"bloodconnect/application"
@@ -184,33 +185,8 @@ func (s *requestService) RespondToRequest(ctx context.Context, requestID domain.
 	reqLogger := s.getReqLogger(ctx, requestID)
 
 	if action == domain.ActionStatusAccepted {
-		since := time.Now().Add(-time.Duration(s.config.MinimumDonationWaitDays) * 24 * time.Hour)
-		sinceISO := domain.ISOTimestamp(since.Format("2006-01-02T15:04:05.000Z"))
-
-		// Check recent accepted actions
-		recentActions, err := s.repo.GetUserRecentActions(ctx, userID, domain.ActionStatusAccepted, sinceISO)
-		if err != nil {
-			reqLogger.Error("Failed to check recent actions", zap.Error(err))
-		} else {
-			for _, ra := range recentActions {
-				if ra.RequestID != requestID {
-					return domain.ErrDonationWaitPeriodNotMet
-				}
-			}
-		}
-
-		// Check last_donation_date in user health
-		health, err := s.userRepo.GetUserHealth(ctx, userID)
-		if err == nil {
-			for _, h := range health {
-				if h.InfoType == domain.InfoTypeLastDonation {
-					// Use a flexible layout for h3 cells, but the date is stored in Details
-					lastDonated, err := time.Parse("2006-01-02", h.Details)
-					if err == nil && lastDonated.After(since) {
-						return domain.ErrDonationWaitPeriodNotMet
-					}
-				}
-			}
+		if err := s.checkDonationEligibility(ctx, userID, requestID); err != nil {
+			return err
 		}
 	}
 
@@ -236,10 +212,46 @@ func (s *requestService) RespondToRequest(ctx context.Context, requestID domain.
 		reqLogger.Info("User accepted donation request", zap.String("actioned_user_id", string(userID)))
 		req, err := s.repo.GetRequestByID(ctx, requestID)
 		if err == nil && req != nil {
-			title := "Donation Request Accepted"
-			content := "A user has accepted your request to donate blood."
 			metadata := domain.DonationAcceptanceMetadata{RequestID: string(requestID), DonorID: string(userID)}
-			_, _ = s.notifService.Submit(ctx, domain.NotificationTypeDonationRequestAcceptance, req.UserID, title, content, metadata)
+			metadataBytes, _ := json.Marshal(metadata)
+			
+			job := &domain.Job{
+				ID:        domain.JobID("notif_" + ulid.Make().String()),
+				Type:      "notification",
+				Payload:   string(metadataBytes),
+				Status:    domain.JobStatusPending,
+				CreatedAt: domain.Now(),
+				UpdatedAt: domain.Now(),
+			}
+
+			// We need to pass the fact that this is a DonationRequestAcceptance
+			// I'll wrap the payload to include the notification type
+			payload := map[string]interface{}{
+				"type": domain.NotificationTypeDonationRequestAcceptance,
+				"recipient": req.UserID,
+				"title": "Donation Request Accepted",
+				"content": "A user has accepted your request to donate blood.",
+				"metadata": metadata,
+			}
+			payloadBytes, _ := json.Marshal(payload)
+			job.Payload = string(payloadBytes)
+
+			if err := s.queue.Enqueue(ctx, job); err != nil {
+				reqLogger.Error("Failed to enqueue notification job", zap.Error(err))
+			}
+		}
+	} else if action == domain.ActionStatusDonated {
+		reqLogger.Info("User completed donation", zap.String("actioned_user_id", string(userID)))
+		// Update user's last donation date
+		health := &domain.UserHealth{
+			UserID:    userID,
+			InfoType:  domain.InfoTypeLastDonation,
+			Details:   time.Now().UTC().Format("2006-01-02"),
+			CreatedAt: domain.Now(),
+			UpdatedAt: domain.Now(),
+		}
+		if err := s.userRepo.UpdateUserHealth(ctx, health); err != nil {
+			reqLogger.Error("Failed to update user last donation date", zap.Error(err))
 		}
 	}
 
@@ -277,4 +289,72 @@ func (s *requestService) RespondToRequest(ctx context.Context, requestID domain.
 	}
 
 	return nil
+}
+
+func (s *requestService) checkDonationEligibility(ctx context.Context, userID domain.UserID, requestID domain.RequestID) error {
+	now := time.Now().UTC()
+	since := now.Add(-time.Duration(s.config.MinimumDonationWaitDays) * 24 * time.Hour)
+	sinceISO := domain.ISOTimestamp(since.Format("2006-01-02T15:04:05.000Z"))
+
+	// Check recent actions (Accepted or Donated)
+	actions := []domain.ActionStatus{domain.ActionStatusAccepted, domain.ActionStatusDonated}
+	recentActions, err := s.repo.GetUserRecentActions(ctx, userID, actions, sinceISO)
+	if err == nil {
+		for _, ra := range recentActions {
+			if ra.RequestID != requestID {
+				return domain.ErrDonationWaitPeriodNotMet
+			}
+		}
+	}
+
+	// Check last_donation_date in user health
+	health, err := s.userRepo.GetUserHealth(ctx, userID)
+	if err == nil {
+		for _, h := range health {
+			if h.InfoType == domain.InfoTypeLastDonation {
+				lastDonated, err := time.Parse("2006-01-02", h.Details)
+				if err == nil && lastDonated.After(since) {
+					return domain.ErrDonationWaitPeriodNotMet
+				}
+			}
+			if h.InfoType == domain.InfoTypeBloodType {
+				donorType := domain.BloodType(h.Details)
+				req, err := s.repo.GetRequestByID(ctx, requestID)
+				if err == nil && req != nil {
+					if !s.isCompatible(donorType, req.BloodType) {
+						return fmt.Errorf("blood type %s is not compatible with request for %s", donorType, req.BloodType)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *requestService) isCompatible(donor, recipient domain.BloodType) bool {
+	// Compatibility Matrix
+	// Recipient -> can receive from
+	matrix := map[domain.BloodType][]domain.BloodType{
+		domain.BloodTypeAPos:  {domain.BloodTypeAPos, domain.BloodTypeANeg, domain.BloodTypeOPos, domain.BloodTypeONeg},
+		domain.BloodTypeANeg:  {domain.BloodTypeANeg, domain.BloodTypeONeg},
+		domain.BloodTypeBPos:  {domain.BloodTypeBPos, domain.BloodTypeBNeg, domain.BloodTypeOPos, domain.BloodTypeONeg},
+		domain.BloodTypeBNeg:  {domain.BloodTypeBNeg, domain.BloodTypeONeg},
+		domain.BloodTypeABPos: {domain.BloodTypeAPos, domain.BloodTypeANeg, domain.BloodTypeBPos, domain.BloodTypeBNeg, domain.BloodTypeABPos, domain.BloodTypeABNeg, domain.BloodTypeOPos, domain.BloodTypeONeg},
+		domain.BloodTypeABNeg: {domain.BloodTypeABNeg, domain.BloodTypeANeg, domain.BloodTypeBNeg, domain.BloodTypeONeg},
+		domain.BloodTypeOPos:  {domain.BloodTypeOPos, domain.BloodTypeONeg},
+		domain.BloodTypeONeg:  {domain.BloodTypeONeg},
+	}
+
+	compatibleTypes, ok := matrix[recipient]
+	if !ok {
+		return false
+	}
+
+	for _, ct := range compatibleTypes {
+		if ct == donor {
+			return true
+		}
+	}
+	return false
 }

@@ -7,8 +7,9 @@ import (
 
 	"bloodconnect/adapters/dummy"
 	api_http "bloodconnect/adapters/http"
-	"bloodconnect/adapters/sqlite"
-	"bloodconnect/adapters/sqlite/repos"
+	"bloodconnect/adapters/postgres"
+	"bloodconnect/adapters/postgres/repos"
+	"bloodconnect/adapters/rabbitmq"
 	"bloodconnect/application"
 	"bloodconnect/application/services"
 
@@ -26,18 +27,22 @@ func main() {
 	}
 	defer logger.Sync()
 
-	db, err := sqlite.SetupDatabase("bloodconnect.db")
+	appConfig := application.DefaultAppConfig()
+
+	db, err := postgres.SetupDatabase(appConfig.DatabaseURL)
 	if err != nil {
-		log.Fatalf("failed to initialize database: %v", err)
+		logger.Fatal("failed to initialize database", zap.Error(err))
 	}
 
 	userRepo := repos.NewUserRepository(db)
 	notifRepo := repos.NewNotificationRepository(db)
 	notifSender := dummy.NewNotificationSender()
 	requestRepo := repos.NewRequestRepository(db)
-	queue := repos.NewJobQueue(db)
-
-	appConfig := application.DefaultAppConfig()
+	
+	queue, err := rabbitmq.NewJobQueue(appConfig.RabbitMQURL)
+	if err != nil {
+		logger.Fatal("failed to initialize rabbitmq queue", zap.Error(err))
+	}
 
 	userService := services.NewUserService(userRepo, appConfig)
 	notifService := services.NewNotificationService(notifRepo, notifSender)

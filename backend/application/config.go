@@ -14,6 +14,8 @@ type AppConfig struct {
 	DefaultPageSize          int
 	MinimumDonationWaitDays  int
 	JobWorkerTickerInterval  time.Duration
+	DatabaseURL              string
+	RabbitMQURL              string
 }
 
 func DefaultAppConfig() *AppConfig {
@@ -29,5 +31,7 @@ func DefaultAppConfig() *AppConfig {
 		DefaultPageSize:          20,
 		MinimumDonationWaitDays:  90,
 		JobWorkerTickerInterval:  5 * time.Second,
+		DatabaseURL:              "host=db user=bloodconnect password=bloodconnect dbname=bloodconnect port=5432 sslmode=disable",
+		RabbitMQURL:              "amqp://guest:guest@rabbitmq:5672/",
 	}
 }

@@ -83,20 +83,20 @@ func (h *RequestHandler) Submit(w http.ResponseWriter, r *http.Request) {
 }
 
 type DonationRequestResponse struct {
-	ID             string              `json:"id"`
-	UserID         string              `json:"user_id"`
-	LocationHex    string              `json:"location_hex"`
-	LocationLat    float64             `json:"location_lat"`
-	LocationLng    float64             `json:"location_lng"`
-	BagCount       int                 `json:"bag_count"`
-	RequiredByDate string              `json:"required_by_date"`
-	BloodType      domain.BloodType    `json:"blood_type"`
-	Description    string              `json:"description"`
-	RequesterInfo  string              `json:"requester_info"`
-	LocationName   string              `json:"location_name"`
+	ID             string               `json:"id"`
+	UserID         string               `json:"user_id"`
+	LocationHex    string               `json:"location_hex"`
+	LocationLat    float64              `json:"location_lat"`
+	LocationLng    float64              `json:"location_lng"`
+	BagCount       int                  `json:"bag_count"`
+	RequiredByDate string               `json:"required_by_date"`
+	BloodType      domain.BloodType     `json:"blood_type"`
+	Description    string               `json:"description"`
+	RequesterInfo  string               `json:"requester_info"`
+	LocationName   string               `json:"location_name"`
 	Status         domain.RequestStatus `json:"status"`
-	CreatedAt      string              `json:"created_at"`
-	UpdatedAt      string              `json:"updated_at"`
+	CreatedAt      string               `json:"created_at"`
+	UpdatedAt      string               `json:"updated_at"`
 }
 
 func mapDonationRequestToResponse(req domain.DonationRequest) DonationRequestResponse {

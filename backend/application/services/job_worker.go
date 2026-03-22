@@ -53,60 +53,89 @@ func NewJobWorkerService(queue application.JobQueue, reqRepo application.Request
 }
 
 func (s *jobWorkerService) Start(ctx context.Context) {
-	s.logger.Info("Starting background job worker...")
-	go func() {
-		ticker := time.NewTicker(s.config.JobWorkerTickerInterval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				s.logger.Info("Stopping background job worker...")
-				return
-			case <-ticker.C:
-				s.logger.Info("Processing next job...")
-				s.processNextJob(ctx)
-			}
-		}
-	}()
+	s.logger.Info("Starting background job worker with RabbitMQ...")
+	
+	// Start consumer for WaveSearch jobs
+	go s.runConsumer(ctx, domain.JobTypeWaveSearch)
+	
+	// Start consumer for Notification jobs
+	go s.runConsumer(ctx, "notification")
+	
+	// Start consumer for CheckResponses jobs
+	go s.runConsumer(ctx, domain.JobTypeCheckResponses)
 }
 
-func (s *jobWorkerService) processNextJob(ctx context.Context) {
-	job, err := s.queue.FetchNextAvailable(ctx)
+func (s *jobWorkerService) runConsumer(ctx context.Context, jobType domain.JobType) {
+	jobChan, err := s.queue.Consume(ctx, jobType)
 	if err != nil {
-		s.logger.Error("Error fetching next job", zap.Error(err))
-		return
-	}
-	if job == nil {
+		s.logger.Error("Failed to start consumer", zap.String("job_type", string(jobType)), zap.Error(err))
 		return
 	}
 
-	jobLogger := s.logger.With(zap.String("job_id", string(job.ID)), zap.String("job_type", string(job.Type)))
+	for job := range jobChan {
+		jobLogger := s.logger.With(zap.String("job_id", string(job.ID)), zap.String("job_type", string(job.Type)))
+		jobLogger.Info("Processing job")
 
-	if err := s.queue.MarkStatus(ctx, job.ID, domain.JobStatusProcessing); err != nil {
-		jobLogger.Error("Error marking job as processing", zap.Error(err))
-		return
+		var processErr error
+		switch job.Type {
+		case domain.JobTypeWaveSearch:
+			processErr = s.processWaveSearch(ctx, job, jobLogger)
+		case domain.JobTypeCheckResponses:
+			processErr = s.processCheckResponses(ctx, job, jobLogger)
+		case "notification":
+			processErr = s.processNotification(ctx, job, jobLogger)
+		default:
+			jobLogger.Warn("Unknown job type")
+		}
+
+		if processErr != nil {
+			jobLogger.Error("Job failed", zap.Error(processErr))
+			// In a real system, we might nack or move to DLQ
+		} else {
+			jobLogger.Info("Job processed successfully")
+		}
+	}
+}
+
+func (s *jobWorkerService) processNotification(ctx context.Context, job *domain.Job, jobLogger *zap.Logger) error {
+	var payload struct {
+		Type      domain.NotificationType   `json:"type"`
+		Recipient domain.UserID             `json:"recipient"`
+		Title     string                    `json:"title"`
+		Content   string                    `json:"content"`
+		Metadata  json.RawMessage           `json:"metadata"`
 	}
 
-	jobLogger.Info("Processing job")
-
-	var processErr error
-	switch job.Type {
-	case domain.JobTypeWaveSearch:
-		processErr = s.processWaveSearch(ctx, job, jobLogger)
-	case domain.JobTypeCheckResponses:
-		processErr = s.processCheckResponses(ctx, job, jobLogger)
-	default:
-		jobLogger.Warn("Unknown job type")
+	if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
+		return err
 	}
 
-	if processErr != nil {
-		jobLogger.Error("Job failed", zap.Error(processErr))
-		_ = s.queue.MarkStatus(ctx, job.ID, domain.JobStatusFailed)
-	} else {
-		jobLogger.Info("Job processed successfully, deleting from queue")
-		_ = s.queue.Delete(ctx, job.ID)
+	// We need to unmarshal metadata based on the type
+	meta := unmarshalMetadata(payload.Type, payload.Metadata)
+
+	_, err := s.notifService.Submit(ctx, payload.Type, payload.Recipient, payload.Title, payload.Content, meta)
+	return err
+}
+
+func unmarshalMetadata(notifType domain.NotificationType, raw []byte) domain.NotificationMetadata {
+	switch notifType {
+	case domain.NotificationTypeDonationRequest:
+		var m domain.DonationRequestMetadata
+		if err := json.Unmarshal(raw, &m); err == nil {
+			return m
+		}
+	case domain.NotificationTypeDonationCompletion:
+		var m domain.DonationCompletionMetadata
+		if err := json.Unmarshal(raw, &m); err == nil {
+			return m
+		}
+	case domain.NotificationTypeDonationRequestAcceptance:
+		var m domain.DonationAcceptanceMetadata
+		if err := json.Unmarshal(raw, &m); err == nil {
+			return m
+		}
 	}
+	return nil
 }
 
 func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Job, jobLogger *zap.Logger) error {
@@ -266,8 +295,27 @@ func (s *jobWorkerService) notifyUsers(ctx context.Context, users *[]domain.User
 		title := "Urgent: Blood Donation Request"
 		content := "Someone needs " + string(req.BloodType) + " blood near you!"
 		metadata := domain.DonationRequestMetadata{RequestID: string(req.ID)}
-		if _, err := s.notifService.Submit(ctx, domain.NotificationTypeDonationRequest, u.ID, title, content, metadata); err != nil {
-			reqLogger.Error("Error submitting notification", zap.Error(err), zap.String("user_id", string(u.ID)))
+		
+		payload := map[string]interface{}{
+			"type": domain.NotificationTypeDonationRequest,
+			"recipient": u.ID,
+			"title": title,
+			"content": content,
+			"metadata": metadata,
+		}
+		payloadBytes, _ := json.Marshal(payload)
+		
+		job := &domain.Job{
+			ID:        domain.JobID("notif_" + ulid.Make().String()),
+			Type:      "notification",
+			Payload:   string(payloadBytes),
+			Status:    domain.JobStatusPending,
+			CreatedAt: domain.Now(),
+			UpdatedAt: domain.Now(),
+		}
+
+		if err := s.queue.Enqueue(ctx, job); err != nil {
+			reqLogger.Error("Error enqueuing notification", zap.Error(err), zap.String("user_id", string(u.ID)))
 			continue
 		}
 

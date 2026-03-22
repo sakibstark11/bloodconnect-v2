@@ -9,6 +9,8 @@ services:
       - ./backend:/app
     environment:
       - CGO_ENABLED=1
+      - DATABASE_URL=host=db user=bloodconnect password=bloodconnect dbname=bloodconnect port=5432 sslmode=disable
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     
   swagger-ui:
     image: swaggerapi/swagger-ui
@@ -29,3 +31,30 @@ services:
       - ./web-client:/app
     environment:
       - CHOKIDAR_USEPOLLING=true
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=bloodconnect
+      - POSTGRES_PASSWORD=bloodconnect
+      - POSTGRES_DB=bloodconnect
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bloodconnect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

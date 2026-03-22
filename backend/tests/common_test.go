@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"bloodconnect/adapters/memory"
+	"bloodconnect/adapters/postgres"
+	"bloodconnect/adapters/postgres/repos"
+	"bloodconnect/adapters/rabbitmq"
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
 	"bloodconnect/application/services"
@@ -42,15 +44,24 @@ func setupTestSuite(t *testing.T) *TestSuite {
 	config.RequestAcceptanceWindow = 500 * time.Millisecond
 	config.JobWorkerTickerInterval = 10 * time.Millisecond
 
-	userRepo := memory.NewUserRepository()
-	reqRepo := memory.NewRequestRepository()
-	notifRepo := memory.NewNotificationRepository()
-	jobQueue := memory.NewJobQueue()
+	db, err := postgres.SetupDatabase(config.DatabaseURL)
+	if err != nil {
+		t.Fatalf("failed to setup test database: %v", err)
+	}
+
+	userRepo := repos.NewUserRepository(db)
+	reqRepo := repos.NewRequestRepository(db)
+	notifRepo := repos.NewNotificationRepository(db)
+	
+	queue, err := rabbitmq.NewJobQueue(config.RabbitMQURL)
+	if err != nil {
+		t.Fatalf("failed to setup rabbitmq queue: %v", err)
+	}
 
 	notifService := services.NewNotificationService(notifRepo, &dummyNotificationSender{})
-	reqService := services.NewRequestService(reqRepo, userRepo, jobQueue, notifService, config, logger)
+	reqService := services.NewRequestService(reqRepo, userRepo, queue, notifService, config, logger)
 	userService := services.NewUserService(userRepo, config)
-	jobWorker, _ := services.NewJobWorkerService(jobQueue, reqRepo, userRepo, notifService, config, logger)
+	jobWorker, _ := services.NewJobWorkerService(queue, reqRepo, userRepo, notifService, config, logger)
 
 	jobWorker.Start(context.Background())
 
@@ -58,7 +69,7 @@ func setupTestSuite(t *testing.T) *TestSuite {
 		userRepo:     userRepo,
 		reqRepo:      reqRepo,
 		notifRepo:    notifRepo,
-		jobQueue:     jobQueue,
+		jobQueue:     queue,
 		notifService: notifService,
 		reqService:   reqService,
 		userService:  userService,

@@ -15,8 +15,9 @@ func TestSearchFirstTrySuccess(t *testing.T) {
 	u2 := createTestUser(ctx, ts, "user2@example.com", domain.BloodTypeOPos, 23.8103, 90.4125)
 	u3 := createTestUser(ctx, ts, "user3@example.com", domain.BloodTypeOPos, 23.8103, 90.4125)
 
+	uReq := createTestUser(ctx, ts, "requester@example.com", domain.BloodTypeOPos, 23.8103, 90.4125)
 	bagCount := 2
-	reqID, err := ts.reqService.SubmitRequest(ctx, domain.UserID("requester_id"), domain.BloodTypeOPos, "Need blood", "Contact info", "Hospital", 23.8103, 90.4125, bagCount, domain.Now())
+	reqID, err := ts.reqService.SubmitRequest(ctx, uReq, domain.BloodTypeOPos, "Need blood", "Contact info", "Hospital", 23.8103, 90.4125, bagCount, domain.Now())
 	if err != nil {
 		t.Fatalf("Failed to submit request: %v", err)
 	}
@@ -47,13 +48,13 @@ func TestSearchFirstTrySuccess(t *testing.T) {
 	ctx3 := context.WithValue(ctx, domain.UserIDKey, u3)
 
 	if len(n1) > 0 {
-		_ = ts.reqService.RespondToRequest(ctx1, reqID, domain.ActionStatusAccepted)
+		_ = ts.reqService.RespondToRequest(ctx1, u1, reqID, domain.ActionStatusAccepted)
 	}
 	if len(n2) > 0 {
-		_ = ts.reqService.RespondToRequest(ctx2, reqID, domain.ActionStatusAccepted)
+		_ = ts.reqService.RespondToRequest(ctx2, u2, reqID, domain.ActionStatusAccepted)
 	}
 	if len(n3) > 0 {
-		_ = ts.reqService.RespondToRequest(ctx3, reqID, domain.ActionStatusAccepted)
+		_ = ts.reqService.RespondToRequest(ctx3, u3, reqID, domain.ActionStatusAccepted)
 	}
 
 	actioned, _ := ts.reqRepo.GetActionedUsers(ctx, reqID)

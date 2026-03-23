@@ -75,7 +75,7 @@ func (h *RequestHandler) Submit(w http.ResponseWriter, r *http.Request) {
 		req.RequesterInfo, req.LocationName, req.LocationLat, req.LocationLng,
 		req.BagCount, domain.ISOTimestamp(req.RequiredByDate))
 	if err != nil {
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to submit request", err.Error())
+		RespondWithError(w, err)
 		return
 	}
 
@@ -217,10 +217,16 @@ func (h *RequestHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 type RespondToRequestBody struct {
-	Action domain.ActionStatus `json:"action" validate:"required,oneof=Accepted Declined Donated"`
+	Action domain.ActionStatus `json:"action" validate:"required,oneof=Accepted Declined"`
 }
 
 func (h *RequestHandler) Respond(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(domain.UserIDKey).(domain.UserID)
+	if !ok || userID == "" {
+		RespondWithError(w, domain.ErrUnauthorized)
+		return
+	}
+
 	requestID := domain.RequestID(r.PathValue("id"))
 	if requestID == "" {
 		RespondJSONError(w, http.StatusBadRequest, "Missing request ID in URL", nil)
@@ -237,12 +243,8 @@ func (h *RequestHandler) Respond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.RespondToRequest(r.Context(), requestID, req.Action); err != nil {
-		if err == domain.ErrDonationWaitPeriodNotMet {
-			RespondJSONError(w, http.StatusBadRequest, "Eligibility check failed", err.Error())
-			return
-		}
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to respond to request", err.Error())
+	if err := h.service.RespondToRequest(r.Context(), userID, requestID, req.Action); err != nil {
+		RespondWithError(w, err)
 		return
 	}
 
@@ -250,14 +252,20 @@ func (h *RequestHandler) Respond(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RequestHandler) Cancel(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(domain.UserIDKey).(domain.UserID)
+	if !ok || userID == "" {
+		RespondWithError(w, domain.ErrUnauthorized)
+		return
+	}
+
 	requestID := domain.RequestID(r.PathValue("id"))
 	if requestID == "" {
 		RespondJSONError(w, http.StatusBadRequest, "Missing request ID in URL", nil)
 		return
 	}
 
-	if err := h.service.CancelRequest(r.Context(), requestID); err != nil {
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to cancel request", err.Error())
+	if err := h.service.CancelRequest(r.Context(), userID, requestID); err != nil {
+		RespondWithError(w, err)
 		return
 	}
 

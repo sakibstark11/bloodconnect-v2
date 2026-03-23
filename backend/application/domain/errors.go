@@ -12,5 +12,6 @@ var (
 	ErrCannotActOnOwnRequest    = errors.New("you cannot act on your own request")
 	ErrRequestAlreadyClosed     = errors.New("request is already closed")
 	ErrRequestNotFound          = errors.New("request not found")
+	ErrEmailAlreadyInUse        = errors.New("email already in use")
 	ErrUnknownError             = errors.New("unknown error")
 )

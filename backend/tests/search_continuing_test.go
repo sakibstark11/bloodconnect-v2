@@ -15,8 +15,9 @@ func TestSearchContinuing(t *testing.T) {
 	u1 := createTestUser(ctx, ts, "userR2_1@example.com", domain.BloodTypeOPos, 23.8123, 90.4145)
 	u2 := createTestUser(ctx, ts, "userR2_2@example.com", domain.BloodTypeOPos, 23.8123, 90.4145)
 
+	uReq := createTestUser(ctx, ts, "requester@example.com", domain.BloodTypeOPos, 23.8103, 90.4125)
 	bagCount := 2
-	_, err := ts.reqService.SubmitRequest(ctx, domain.UserID("requester_id"), domain.BloodTypeOPos, "Need blood", "Contact info", "Hospital", 23.8103, 90.4125, bagCount, domain.Now())
+	_, err := ts.reqService.SubmitRequest(ctx, uReq, domain.BloodTypeOPos, "Need blood", "Contact info", "Hospital", 23.8103, 90.4125, bagCount, domain.Now())
 	if err != nil {
 		t.Fatalf("Failed to submit request: %v", err)
 	}

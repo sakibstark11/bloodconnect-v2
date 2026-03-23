@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"bloodconnect/application/domain"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -20,6 +21,54 @@ func RespondJSONError(w http.ResponseWriter, statusCode int, message string, det
 		Error:   message,
 		Details: details,
 	})
+}
+
+func RespondWithError(w http.ResponseWriter, err error) {
+	if err == nil {
+		return
+	}
+
+	statusCode := http.StatusInternalServerError
+	message := "Internal server error"
+	var details any
+
+	switch err {
+	case domain.ErrUnauthorized:
+		statusCode = http.StatusUnauthorized
+		message = "Unauthorized"
+	case domain.ErrUserNotFound, domain.ErrRequestNotFound:
+		statusCode = http.StatusNotFound
+		message = "Resource not found"
+		details = err.Error()
+	case domain.ErrIncompatibleBloodType, domain.ErrPendingRequestExists, domain.ErrDonationWaitPeriodNotMet, domain.ErrBloodTypeUpdateDenied:
+		statusCode = http.StatusBadRequest
+		message = "Eligibility check failed"
+		details = err.Error()
+	case domain.ErrCannotActOnOwnRequest:
+		statusCode = http.StatusForbidden
+		message = "Forbidden action"
+		details = err.Error()
+	case domain.ErrRequestAlreadyClosed:
+		statusCode = http.StatusGone
+		message = "Request already closed"
+	case domain.ErrEmailAlreadyInUse:
+		statusCode = http.StatusConflict
+		message = "Conflict"
+		details = err.Error()
+	default:
+		// Check for specific unauthorized messages if they aren't domain errors yet
+		if err.Error() == "unauthorized to cancel this request" {
+			statusCode = http.StatusForbidden
+			message = "Permission denied"
+			details = err.Error()
+		} else if err.Error() == "email already in use" {
+			statusCode = http.StatusConflict
+			message = "Conflict"
+			details = err.Error()
+		}
+	}
+
+	RespondJSONError(w, statusCode, message, details)
 }
 
 func RespondJSON(w http.ResponseWriter, statusCode int, body any) {

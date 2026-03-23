@@ -15,8 +15,8 @@ import (
 
 type RequestService interface {
 	SubmitRequest(ctx context.Context, userID domain.UserID, bloodType domain.BloodType, desc, reqInfo, locName string, lat, lng float64, count int, requiredBy domain.ISOTimestamp) (domain.RequestID, error)
-	RespondToRequest(ctx context.Context, requestID domain.RequestID, action domain.ActionStatus) error
-	CancelRequest(ctx context.Context, requestID domain.RequestID) error
+	RespondToRequest(ctx context.Context, userID domain.UserID, requestID domain.RequestID, action domain.ActionStatus) error
+	CancelRequest(ctx context.Context, userID domain.UserID, requestID domain.RequestID) error
 	GetRequest(ctx context.Context, requestID domain.RequestID) (*domain.DonationRequest, error)
 	GetExtendedRequest(ctx context.Context, requestID domain.RequestID) (*domain.ExtendedDonationRequest, error)
 	ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]domain.DonationRequest, error)
@@ -97,12 +97,13 @@ func (s *requestService) GetExtendedRequest(ctx context.Context, requestID domai
 	}, nil
 }
 
-func (s *requestService) CancelRequest(ctx context.Context, requestID domain.RequestID) error {
-	userID, _ := ctx.Value(domain.UserIDKey).(domain.UserID)
-
+func (s *requestService) CancelRequest(ctx context.Context, userID domain.UserID, requestID domain.RequestID) error {
 	req, err := s.repo.GetRequestByID(ctx, requestID)
 	if err != nil {
 		return err
+	}
+	if req == nil {
+		return domain.ErrRequestNotFound
 	}
 
 	if req.UserID != userID {
@@ -116,6 +117,15 @@ func (s *requestService) CancelRequest(ctx context.Context, requestID domain.Req
 }
 
 func (s *requestService) SubmitRequest(ctx context.Context, userID domain.UserID, bloodType domain.BloodType, desc, reqInfo, locName string, lat, lng float64, count int, requiredBy domain.ISOTimestamp) (domain.RequestID, error) {
+	// fail fast: user doesn't exist
+	user, err := s.userRepo.GetUserByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if user == nil {
+		return "", domain.ErrUserNotFound
+	}
+
 	cell, _ := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, s.config.H3HexResolution)
 	hex := cell.String()
 	reqID := domain.RequestID("request_" + ulid.Make().String())
@@ -177,8 +187,7 @@ func (s *requestService) SubmitRequest(ctx context.Context, userID domain.UserID
 	return reqID, nil
 }
 
-func (s *requestService) RespondToRequest(ctx context.Context, requestID domain.RequestID, action domain.ActionStatus) error {
-	userID, _ := ctx.Value(domain.UserIDKey).(domain.UserID)
+func (s *requestService) RespondToRequest(ctx context.Context, userID domain.UserID, requestID domain.RequestID, action domain.ActionStatus) error {
 	reqLogger := s.getReqLogger(ctx, requestID)
 
 	// fail: respond to a non-existent request
@@ -186,20 +195,15 @@ func (s *requestService) RespondToRequest(ctx context.Context, requestID domain.
 	if err != nil {
 		return err
 	}
-	if req == nil {
+
+	switch {
+	case req == nil:
 		return domain.ErrRequestNotFound
-	}
-
-	// fail: accept their own request
-	if req.UserID == userID {
+	case req.UserID == userID:
 		return domain.ErrCannotActOnOwnRequest
-	}
-
-	if req.Status != domain.RequestStatusPending {
+	case req.Status != domain.RequestStatusPending:
 		return domain.ErrRequestAlreadyClosed
-	}
-
-	if action != domain.ActionStatusAccepted && action != domain.ActionStatusDeclined {
+	case action != domain.ActionStatusAccepted && action != domain.ActionStatusDeclined:
 		return domain.ErrUnauthorized
 	}
 
@@ -274,14 +278,19 @@ func (s *requestService) checkDonationEligibility(ctx context.Context, userID do
 	now := time.Now().UTC()
 	since := now.Add(-time.Duration(s.config.MinimumDonationWaitDays) * 24 * time.Hour)
 
-	// fail: accept an incompatible blood type request
 	health, err := s.userRepo.GetUserHealth(ctx, userID)
 	if err == nil {
 		for _, h := range health {
-			if h.InfoType == domain.InfoTypeBloodType {
+			switch h.InfoType {
+			case domain.InfoTypeBloodType:
 				donorType := domain.BloodType(h.Details)
 				if !s.isCompatible(donorType, req.BloodType) {
 					return domain.ErrIncompatibleBloodType
+				}
+			case domain.InfoTypeLastDonation:
+				lastDonated, err := time.Parse("2006-01-02", h.Details)
+				if err == nil && lastDonated.After(since) {
+					return domain.ErrDonationWaitPeriodNotMet
 				}
 			}
 		}
@@ -294,18 +303,6 @@ func (s *requestService) checkDonationEligibility(ctx context.Context, userID do
 	if err == nil {
 		if len(recentActions) > 0 {
 			return domain.ErrPendingRequestExists
-		}
-	}
-
-	// fail: last donation date is not within our expected range
-	if err == nil {
-		for _, h := range health {
-			if h.InfoType == domain.InfoTypeLastDonation {
-				lastDonated, err := time.Parse("2006-01-02", h.Details)
-				if err == nil && lastDonated.After(since) {
-					return domain.ErrDonationWaitPeriodNotMet
-				}
-			}
 		}
 	}
 

@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"bloodconnect/application"
@@ -17,9 +16,9 @@ import (
 type UserService interface {
 	Signup(ctx context.Context, name, email, password, phone string) (domain.UserID, error)
 	Login(ctx context.Context, email, password string) (string, *domain.User, error)
-	GetMe(ctx context.Context) (*domain.User, []domain.UserHealth, error)
-	UpdateHealth(ctx context.Context, infoType domain.InfoType, details string) error
-	UpdateLocation(ctx context.Context, lat, lng float64) error
+	GetMe(ctx context.Context, userID domain.UserID) (*domain.User, []domain.UserHealth, error)
+	UpdateHealth(ctx context.Context, userID domain.UserID, infoType domain.InfoType, details string) error
+	UpdateLocation(ctx context.Context, userID domain.UserID, lat, lng float64) error
 }
 
 type userService struct {
@@ -32,6 +31,12 @@ func NewUserService(repo application.UserRepository, config *application.AppConf
 }
 
 func (s *userService) Signup(ctx context.Context, name, email, password, phone string) (domain.UserID, error) {
+	// fail fast: email already exists
+	existing, _ := s.repo.GetUserAuthByEmail(ctx, email)
+	if existing != nil {
+		return "", domain.ErrEmailAlreadyInUse
+	}
+
 	id := domain.UserID("user_" + ulid.Make().String())
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -58,15 +63,15 @@ func (s *userService) Signup(ctx context.Context, name, email, password, phone s
 func (s *userService) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
 
 	userAuth, err := s.repo.GetUserAuthByEmail(ctx, email)
-	if err != nil {
+	switch {
+	case err != nil:
 		return "", nil, err
-	}
-	if userAuth == nil {
-		return "", nil, errors.New("invalid credentials")
+	case userAuth == nil:
+		return "", nil, domain.ErrUnauthorized
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(userAuth.Password), []byte(password)); err != nil {
-		return "", nil, errors.New("invalid credentials")
+		return "", nil, domain.ErrUnauthorized
 	}
 
 	user, err := s.repo.GetUserByID(ctx, userAuth.UserID)
@@ -92,9 +97,8 @@ func (s *userService) generateToken(userID domain.UserID) (string, error) {
 	return token.SignedString([]byte(s.config.JWTSecret))
 }
 
-func (s *userService) GetMe(ctx context.Context) (*domain.User, []domain.UserHealth, error) {
-	userID, ok := ctx.Value(domain.UserIDKey).(domain.UserID)
-	if !ok || userID == "" {
+func (s *userService) GetMe(ctx context.Context, userID domain.UserID) (*domain.User, []domain.UserHealth, error) {
+	if userID == "" {
 		return nil, nil, domain.ErrUnauthorized
 	}
 	user, err := s.repo.GetUserByID(ctx, userID)
@@ -111,8 +115,18 @@ func (s *userService) GetMe(ctx context.Context) (*domain.User, []domain.UserHea
 	return user, health, nil
 }
 
-func (s *userService) UpdateHealth(ctx context.Context, infoType domain.InfoType, details string) error {
-	userID, _ := ctx.Value(domain.UserIDKey).(domain.UserID)
+func (s *userService) UpdateHealth(ctx context.Context, userID domain.UserID, infoType domain.InfoType, details string) error {
+	if userID == "" {
+		return domain.ErrUnauthorized
+	}
+
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return domain.ErrUserNotFound
+	}
 
 	if infoType == domain.InfoTypeBloodType {
 		health, err := s.repo.GetUserHealth(ctx, userID)
@@ -136,8 +150,18 @@ func (s *userService) UpdateHealth(ctx context.Context, infoType domain.InfoType
 	return s.repo.UpdateUserHealth(ctx, health)
 }
 
-func (s *userService) UpdateLocation(ctx context.Context, lat, lng float64) error {
-	userID, _ := ctx.Value(domain.UserIDKey).(domain.UserID)
+func (s *userService) UpdateLocation(ctx context.Context, userID domain.UserID, lat, lng float64) error {
+	if userID == "" {
+		return domain.ErrUnauthorized
+	}
+
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return domain.ErrUserNotFound
+	}
 
 	cell, _ := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, s.config.H3HexResolution)
 	loc := &domain.UserPreferredDonationLocation{

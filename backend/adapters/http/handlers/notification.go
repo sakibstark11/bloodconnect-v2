@@ -50,7 +50,7 @@ type NotificationsResponse struct {
 func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(domain.UserIDKey).(domain.UserID)
 	if !ok || userID == "" {
-		RespondJSONError(w, http.StatusUnauthorized, "Unauthorized", nil)
+		RespondWithError(w, domain.ErrUnauthorized)
 		return
 	}
 
@@ -60,7 +60,7 @@ func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 
 	notifications, err := h.service.GetForUser(r.Context(), userID, lastNotificationID, pageSize)
 	if err != nil {
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to fetch notifications", err.Error())
+		RespondWithError(w, err)
 		return
 	}
 

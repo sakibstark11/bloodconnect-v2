@@ -177,6 +177,9 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 	if err != nil {
 		return err
 	}
+	if req == nil {
+		return fmt.Errorf("request not found: %s", payload.RequestID)
+	}
 	reqLogger := jobLogger.With(zap.String("request_id", string(req.ID)))
 
 	if req.Status != domain.RequestStatusPending {

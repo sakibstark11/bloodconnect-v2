@@ -51,7 +51,7 @@ func (h *UserHandler) Signup(w http.ResponseWriter, r *http.Request) {
 
 	id, err := h.service.Signup(r.Context(), req.Name, req.Email, req.Password, req.Phone)
 	if err != nil {
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to create user", err.Error())
+		RespondWithError(w, err)
 		return
 	}
 
@@ -124,13 +124,15 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
-	user, health, err := h.service.GetMe(r.Context())
+	userID, ok := r.Context().Value(domain.UserIDKey).(domain.UserID)
+	if !ok || userID == "" {
+		RespondWithError(w, domain.ErrUnauthorized)
+		return
+	}
+
+	user, health, err := h.service.GetMe(r.Context(), userID)
 	if err != nil {
-		if err == domain.ErrUnauthorized {
-			RespondJSONError(w, http.StatusUnauthorized, "Unauthorized", nil)
-			return
-		}
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to get user info", err.Error())
+		RespondWithError(w, err)
 		return
 	}
 	RespondJSON(w, http.StatusOK, mapUserToResponse(user, health))
@@ -142,6 +144,12 @@ type UpdateHealthRequest struct {
 }
 
 func (h *UserHandler) UpdateHealth(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(domain.UserIDKey).(domain.UserID)
+	if !ok || userID == "" {
+		RespondWithError(w, domain.ErrUnauthorized)
+		return
+	}
+
 	var req UpdateHealthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		RespondJSONError(w, http.StatusBadRequest, "Invalid JSON payload", err.Error())
@@ -152,8 +160,8 @@ func (h *UserHandler) UpdateHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.UpdateHealth(r.Context(), req.InfoType, req.Details); err != nil {
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to update health", err.Error())
+	if err := h.service.UpdateHealth(r.Context(), userID, req.InfoType, req.Details); err != nil {
+		RespondWithError(w, err)
 		return
 	}
 
@@ -166,6 +174,12 @@ type UpdateLocationRequest struct {
 }
 
 func (h *UserHandler) UpdateLocation(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(domain.UserIDKey).(domain.UserID)
+	if !ok || userID == "" {
+		RespondWithError(w, domain.ErrUnauthorized)
+		return
+	}
+
 	var req UpdateLocationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		RespondJSONError(w, http.StatusBadRequest, "Invalid JSON payload", err.Error())
@@ -176,8 +190,8 @@ func (h *UserHandler) UpdateLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.UpdateLocation(r.Context(), req.Lat, req.Lng); err != nil {
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to update location", err.Error())
+	if err := h.service.UpdateLocation(r.Context(), userID, req.Lat, req.Lng); err != nil {
+		RespondWithError(w, err)
 		return
 	}
 

@@ -12,8 +12,9 @@ func TestSearchExhausted(t *testing.T) {
 	ctx := context.Background()
 	ts := setupTestSuite(t)
 
+	uReq := createTestUser(ctx, ts, "requester@example.com", domain.BloodTypeOPos, 23.8103, 90.4125)
 	bagCount := 2
-	reqID, err := ts.reqService.SubmitRequest(ctx, domain.UserID("requester_id"), domain.BloodTypeOPos, "Need blood", "Contact info", "Hospital", 23.8103, 90.4125, bagCount, domain.Now())
+	reqID, err := ts.reqService.SubmitRequest(ctx, uReq, domain.BloodTypeOPos, "Need blood", "Contact info", "Hospital", 23.8103, 90.4125, bagCount, domain.Now())
 	if err != nil {
 		t.Fatalf("Failed to submit request: %v", err)
 	}

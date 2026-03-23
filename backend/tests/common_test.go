@@ -90,12 +90,12 @@ func createTestUser(ctx context.Context, ts *TestSuite, email string, bloodType 
 
 	ctxUser := context.WithValue(ctx, domain.UserIDKey, userID)
 
-	err = ts.userService.UpdateHealth(ctxUser, domain.InfoTypeBloodType, string(bloodType))
+	err = ts.userService.UpdateHealth(ctxUser, userID, domain.InfoTypeBloodType, string(bloodType))
 	if err != nil {
 		panic("Failed to update health for test user: " + err.Error())
 	}
 
-	err = ts.userService.UpdateLocation(ctxUser, lat, lng)
+	err = ts.userService.UpdateLocation(ctxUser, userID, lat, lng)
 	if err != nil {
 		panic("Failed to update location for test user: " + err.Error())
 	}

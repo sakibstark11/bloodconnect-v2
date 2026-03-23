@@ -22,7 +22,7 @@ func DefaultAppConfig() *AppConfig {
 	return &AppConfig{
 		ProcessRequestWindowDays: 7,
 		SearchRadiusKm:           5.0,
-		H3HexResolution:          8,
+		H3HexResolution:          10,
 		WaveSearchInterval:       3 * time.Minute,
 		WaveSearchMaxRetries:     3,
 		RequestAcceptanceWindow:  1 * time.Hour,

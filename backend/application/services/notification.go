@@ -15,14 +15,14 @@ type NotificationService interface {
 }
 
 type notificationService struct {
-	repo   application.NotificationRepository
-	sender application.NotificationSender
+	repo  application.NotificationRepository
+	queue application.JobQueue
 }
 
-func NewNotificationService(repo application.NotificationRepository, sender application.NotificationSender) NotificationService {
+func NewNotificationService(repo application.NotificationRepository, queue application.JobQueue) NotificationService {
 	return &notificationService{
-		repo:   repo,
-		sender: sender,
+		repo:  repo,
+		queue: queue,
 	}
 }
 
@@ -43,7 +43,13 @@ func (s *notificationService) Submit(ctx context.Context, notifType domain.Notif
 		return "", err
 	}
 
-	_ = s.sender.Send(ctx, notification)
+	// Enqueue job for background processing
+	_ = s.queue.Enqueue(ctx, &domain.Job{
+		ID:      domain.JobID("job_" + ulid.Make().String()),
+		Type:    domain.JobTypeNotification,
+		Payload: map[string]interface{}{"notification_id": string(id)},
+		RunAt:   domain.Now(),
+	})
 
 	return id, nil
 }

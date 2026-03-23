@@ -18,7 +18,7 @@ func TestSearchExhausted(t *testing.T) {
 		t.Fatalf("Failed to submit request: %v", err)
 	}
 
-	maxAttempts := 50
+	maxAttempts := 300
 	for i := 0; i < maxAttempts; i++ {
 		runWorkerOnce(ctx, ts)
 		req, _ := ts.reqRepo.GetRequestByID(ctx, reqID)

@@ -17,12 +17,13 @@ type JobType string
 const (
 	JobTypeWaveSearch     JobType = "wave_search"
 	JobTypeCheckResponses JobType = "check_responses"
+	JobTypeNotification   JobType = "notification"
 )
 
 type Job struct {
 	ID        JobID
 	Type      JobType
-	Payload   string
+	Payload   interface{}
 	Status    JobStatus
 	RunAt     ISOTimestamp
 	CreatedAt ISOTimestamp

@@ -12,8 +12,8 @@ func TestSearchContinuing(t *testing.T) {
 	ctx := context.Background()
 	ts := setupTestSuite(t)
 
-	u1 := createTestUser(ctx, ts, "userR2_1@example.com", domain.BloodTypeOPos, 23.8303, 90.4325)
-	u2 := createTestUser(ctx, ts, "userR2_2@example.com", domain.BloodTypeOPos, 23.8303, 90.4325)
+	u1 := createTestUser(ctx, ts, "userR2_1@example.com", domain.BloodTypeOPos, 23.8123, 90.4145)
+	u2 := createTestUser(ctx, ts, "userR2_2@example.com", domain.BloodTypeOPos, 23.8123, 90.4145)
 
 	bagCount := 2
 	_, err := ts.reqService.SubmitRequest(ctx, domain.UserID("requester_id"), domain.BloodTypeOPos, "Need blood", "Contact info", "Hospital", 23.8103, 90.4125, bagCount, domain.Now())

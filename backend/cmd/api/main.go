@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 
+	db_repos "bloodconnect/adapters/db"
 	"bloodconnect/adapters/dummy"
 	api_http "bloodconnect/adapters/http"
 	"bloodconnect/adapters/postgres"
-	"bloodconnect/adapters/postgres/repos"
 	"bloodconnect/adapters/rabbitmq"
 	"bloodconnect/application"
 	"bloodconnect/application/services"
@@ -34,10 +34,10 @@ func main() {
 		logger.Fatal("failed to initialize database", zap.Error(err))
 	}
 
-	userRepo := repos.NewUserRepository(db)
-	notifRepo := repos.NewNotificationRepository(db)
+	userRepo := db_repos.NewUserRepository(db)
+	notifRepo := db_repos.NewNotificationRepository(db)
 	notifSender := dummy.NewNotificationSender()
-	requestRepo := repos.NewRequestRepository(db)
+	requestRepo := db_repos.NewRequestRepository(db)
 	
 	queue, err := rabbitmq.NewJobQueue(appConfig.RabbitMQURL)
 	if err != nil {
@@ -45,11 +45,11 @@ func main() {
 	}
 
 	userService := services.NewUserService(userRepo, appConfig)
-	notifService := services.NewNotificationService(notifRepo, notifSender)
+	notifService := services.NewNotificationService(notifRepo, queue)
 
 	requestService := services.NewRequestService(requestRepo, userRepo, queue, notifService, appConfig, logger)
 
-	workerService, err := services.NewJobWorkerService(queue, requestRepo, userRepo, notifService, appConfig, logger)
+	workerService, err := services.NewJobWorkerService(queue, requestRepo, userRepo, notifRepo, notifService, notifSender, appConfig, logger)
 	if err != nil {
 		log.Fatalf("failed to initialize job worker service: %v", err)
 	}

@@ -3,7 +3,7 @@ package postgres
 import (
 	"log"
 
-	"bloodconnect/adapters/postgres/models"
+	"bloodconnect/adapters/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -25,7 +25,6 @@ func SetupDatabase(dsn string) (*gorm.DB, error) {
 		&models.Notification{},
 		&models.Request{},
 		&models.RequestState{},
-		&models.Job{},
 	)
 	if err != nil {
 		return nil, err

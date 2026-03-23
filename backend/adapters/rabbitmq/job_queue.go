@@ -30,8 +30,9 @@ func NewJobQueue(url string) (application.JobQueue, error) {
 	}
 
 	queues := map[domain.JobType]string{
-		domain.JobTypeWaveSearch:   "wave_search_jobs",
-		"notification":             "notification_jobs", // Added for refactor
+		domain.JobTypeWaveSearch:     "wave_search_jobs",
+		domain.JobTypeNotification:   "notification_jobs",
+		domain.JobTypeCheckResponses: "check_responses_jobs",
 	}
 
 	for _, qName := range queues {
@@ -77,19 +78,6 @@ func (q *rabbitMQJobQueue) Enqueue(ctx context.Context, job *domain.Job) error {
 			ContentType: "application/json",
 			Body:        body,
 		})
-}
-
-// These methods are no longer used with RabbitMQ as it handles queuing natively
-func (q *rabbitMQJobQueue) FetchNextAvailable(ctx context.Context) (*domain.Job, error) {
-	return nil, nil
-}
-
-func (q *rabbitMQJobQueue) MarkStatus(ctx context.Context, id domain.JobID, status domain.JobStatus) error {
-	return nil
-}
-
-func (q *rabbitMQJobQueue) Delete(ctx context.Context, id domain.JobID) error {
-	return nil
 }
 
 func (q *rabbitMQJobQueue) Consume(ctx context.Context, jobType domain.JobType) (<-chan *domain.Job, error) {

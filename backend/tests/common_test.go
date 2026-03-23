@@ -2,12 +2,13 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
-	"bloodconnect/adapters/postgres"
-	"bloodconnect/adapters/postgres/repos"
-	"bloodconnect/adapters/rabbitmq"
+	db_repos "bloodconnect/adapters/db"
+	"bloodconnect/adapters/memory"
+	"bloodconnect/adapters/sqlite"
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
 	"bloodconnect/application/services"
@@ -44,24 +45,22 @@ func setupTestSuite(t *testing.T) *TestSuite {
 	config.RequestAcceptanceWindow = 500 * time.Millisecond
 	config.JobWorkerTickerInterval = 10 * time.Millisecond
 
-	db, err := postgres.SetupDatabase(config.DatabaseURL)
+	db, err := sqlite.SetupDatabase(fmt.Sprintf("file:%s?mode=memory&cache=shared", t.Name()))
 	if err != nil {
 		t.Fatalf("failed to setup test database: %v", err)
 	}
 
-	userRepo := repos.NewUserRepository(db)
-	reqRepo := repos.NewRequestRepository(db)
-	notifRepo := repos.NewNotificationRepository(db)
-	
-	queue, err := rabbitmq.NewJobQueue(config.RabbitMQURL)
-	if err != nil {
-		t.Fatalf("failed to setup rabbitmq queue: %v", err)
-	}
+	userRepo := db_repos.NewUserRepository(db)
+	reqRepo := db_repos.NewRequestRepository(db)
+	notifRepo := db_repos.NewNotificationRepository(db)
 
-	notifService := services.NewNotificationService(notifRepo, &dummyNotificationSender{})
+	queue := memory.NewJobQueue()
+
+	notifSender := &dummyNotificationSender{}
+	notifService := services.NewNotificationService(notifRepo, queue)
 	reqService := services.NewRequestService(reqRepo, userRepo, queue, notifService, config, logger)
 	userService := services.NewUserService(userRepo, config)
-	jobWorker, _ := services.NewJobWorkerService(queue, reqRepo, userRepo, notifService, config, logger)
+	jobWorker, _ := services.NewJobWorkerService(queue, reqRepo, userRepo, notifRepo, notifService, notifSender, config, logger)
 
 	jobWorker.Start(context.Background())
 
@@ -79,8 +78,12 @@ func setupTestSuite(t *testing.T) *TestSuite {
 	}
 }
 
+var phoneCounter int
+
 func createTestUser(ctx context.Context, ts *TestSuite, email string, bloodType domain.BloodType, lat, lng float64) domain.UserID {
-	userID, err := ts.userService.Signup(ctx, "Test User", email, "password", "+880123456789")
+	phoneCounter++
+	phone := fmt.Sprintf("+88017%08d", phoneCounter)
+	userID, err := ts.userService.Signup(ctx, "Test User", email, "password", phone)
 	if err != nil {
 		panic("Failed to signup test user: " + err.Error())
 	}

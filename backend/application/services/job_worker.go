@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"time"
 
@@ -27,12 +28,23 @@ type jobWorkerService struct {
 	queue        application.JobQueue
 	reqRepo      application.RequestRepository
 	userRepo     application.UserRepository
+	notifRepo    application.NotificationRepository
 	notifService NotificationService
+	notifSender  application.NotificationSender
 	config       *jobWorkerServiceConfig
 	logger       *zap.Logger
 }
 
-func NewJobWorkerService(queue application.JobQueue, reqRepo application.RequestRepository, userRepo application.UserRepository, notifService NotificationService, config *application.AppConfig, logger *zap.Logger) (JobWorkerService, error) {
+func NewJobWorkerService(
+	queue application.JobQueue,
+	reqRepo application.RequestRepository,
+	userRepo application.UserRepository,
+	notifRepo application.NotificationRepository,
+	notifService NotificationService,
+	notifSender application.NotificationSender,
+	config *application.AppConfig,
+	logger *zap.Logger,
+) (JobWorkerService, error) {
 	edgeLen, err := h3.HexagonEdgeLengthAvgKm(config.H3HexResolution)
 	if err != nil {
 		return nil, err
@@ -46,7 +58,9 @@ func NewJobWorkerService(queue application.JobQueue, reqRepo application.Request
 		queue:        queue,
 		reqRepo:      reqRepo,
 		userRepo:     userRepo,
+		notifRepo:    notifRepo,
 		notifService: notifService,
+		notifSender:  notifSender,
 		config:       internalConfig,
 		logger:       logger.With(zap.String("service", "JobWorkerService")),
 	}, nil
@@ -59,7 +73,7 @@ func (s *jobWorkerService) Start(ctx context.Context) {
 	go s.runConsumer(ctx, domain.JobTypeWaveSearch)
 	
 	// Start consumer for Notification jobs
-	go s.runConsumer(ctx, "notification")
+	go s.runConsumer(ctx, domain.JobTypeNotification)
 	
 	// Start consumer for CheckResponses jobs
 	go s.runConsumer(ctx, domain.JobTypeCheckResponses)
@@ -82,7 +96,7 @@ func (s *jobWorkerService) runConsumer(ctx context.Context, jobType domain.JobTy
 			processErr = s.processWaveSearch(ctx, job, jobLogger)
 		case domain.JobTypeCheckResponses:
 			processErr = s.processCheckResponses(ctx, job, jobLogger)
-		case "notification":
+		case domain.JobTypeNotification:
 			processErr = s.processNotification(ctx, job, jobLogger)
 		default:
 			jobLogger.Warn("Unknown job type")
@@ -98,23 +112,34 @@ func (s *jobWorkerService) runConsumer(ctx context.Context, jobType domain.JobTy
 }
 
 func (s *jobWorkerService) processNotification(ctx context.Context, job *domain.Job, jobLogger *zap.Logger) error {
-	var payload struct {
-		Type      domain.NotificationType   `json:"type"`
-		Recipient domain.UserID             `json:"recipient"`
-		Title     string                    `json:"title"`
-		Content   string                    `json:"content"`
-		Metadata  json.RawMessage           `json:"metadata"`
+	payload, ok := job.Payload.(map[string]interface{})
+	if !ok {
+		// Try unmarshalling if it's a string (e.g. from RabbitMQ)
+		if str, ok := job.Payload.(string); ok {
+			if err := json.Unmarshal([]byte(str), &payload); err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("invalid notification payload type: %T", job.Payload)
+		}
 	}
 
-	if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
+	notifIDStr, ok := payload["notification_id"].(string)
+	if !ok || notifIDStr == "" {
+		return fmt.Errorf("missing notification_id in payload")
+	}
+
+	notifID := domain.NotificationID(notifIDStr)
+	// Fetch notification from repo
+	notif, err := s.notifRepo.GetNotificationByID(ctx, notifID)
+	if err != nil {
 		return err
 	}
+	if notif == nil {
+		return fmt.Errorf("notification not found: %s", notifID)
+	}
 
-	// We need to unmarshal metadata based on the type
-	meta := unmarshalMetadata(payload.Type, payload.Metadata)
-
-	_, err := s.notifService.Submit(ctx, payload.Type, payload.Recipient, payload.Title, payload.Content, meta)
-	return err
+	return s.notifSender.Send(ctx, notif)
 }
 
 func unmarshalMetadata(notifType domain.NotificationType, raw []byte) domain.NotificationMetadata {
@@ -140,7 +165,11 @@ func unmarshalMetadata(notifType domain.NotificationType, raw []byte) domain.Not
 
 func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Job, jobLogger *zap.Logger) error {
 	var payload domain.WaveSearchPayload
-	if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
+	payloadBytes, err := json.Marshal(job.Payload)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
 		return err
 	}
 
@@ -296,26 +325,8 @@ func (s *jobWorkerService) notifyUsers(ctx context.Context, users *[]domain.User
 		content := "Someone needs " + string(req.BloodType) + " blood near you!"
 		metadata := domain.DonationRequestMetadata{RequestID: string(req.ID)}
 		
-		payload := map[string]interface{}{
-			"type": domain.NotificationTypeDonationRequest,
-			"recipient": u.ID,
-			"title": title,
-			"content": content,
-			"metadata": metadata,
-		}
-		payloadBytes, _ := json.Marshal(payload)
-		
-		job := &domain.Job{
-			ID:        domain.JobID("notif_" + ulid.Make().String()),
-			Type:      "notification",
-			Payload:   string(payloadBytes),
-			Status:    domain.JobStatusPending,
-			CreatedAt: domain.Now(),
-			UpdatedAt: domain.Now(),
-		}
-
-		if err := s.queue.Enqueue(ctx, job); err != nil {
-			reqLogger.Error("Error enqueuing notification", zap.Error(err), zap.String("user_id", string(u.ID)))
+		if _, err := s.notifService.Submit(ctx, domain.NotificationTypeDonationRequest, u.ID, title, content, metadata); err != nil {
+			reqLogger.Error("Error submitting notification", zap.Error(err), zap.String("user_id", string(u.ID)))
 			continue
 		}
 
@@ -356,7 +367,6 @@ func (s *jobWorkerService) scheduleNextWaveSearch(ctx context.Context, job *doma
 			req.Status = domain.RequestStatusFailed
 			req.UpdatedAt = domain.Now()
 			_ = s.reqRepo.UpdateRequest(ctx, req)
-			_ = s.queue.MarkStatus(ctx, job.ID, domain.JobStatusCompleted)
 			return nil
 		}
 
@@ -374,11 +384,10 @@ func (s *jobWorkerService) scheduleNextWaveSearch(ctx context.Context, job *doma
 		CurrentRing: nextRing,
 		RetryCount:  nextRetryCount,
 	}
-	nextPayloadBytes, _ := json.Marshal(nextPayload)
 	nextJob := &domain.Job{
 		ID:        domain.JobID("job_" + ulid.Make().String()),
 		Type:      domain.JobTypeWaveSearch,
-		Payload:   string(nextPayloadBytes),
+		Payload:   nextPayload,
 		Status:    domain.JobStatusPending,
 		RunAt:     domain.ISOTimestamp(runAt.Format("2006-01-02T15:04:05.000Z")),
 		CreatedAt: domain.Now(),

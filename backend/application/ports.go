@@ -37,6 +37,7 @@ type RequestRepository interface {
 
 type NotificationRepository interface {
 	CreateNotification(ctx context.Context, notification *domain.Notification) error
+	GetNotificationByID(ctx context.Context, id domain.NotificationID) (*domain.Notification, error)
 	GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error)
 }
 
@@ -46,8 +47,6 @@ type NotificationSender interface {
 
 type JobQueue interface {
 	Enqueue(ctx context.Context, job *domain.Job) error
-	FetchNextAvailable(ctx context.Context) (*domain.Job, error)
-	MarkStatus(ctx context.Context, id domain.JobID, status domain.JobStatus) error
-	Delete(ctx context.Context, id domain.JobID) error
 	Consume(ctx context.Context, jobType domain.JobType) (<-chan *domain.Job, error)
+	Close() error
 }

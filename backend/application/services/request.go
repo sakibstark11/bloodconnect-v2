@@ -2,9 +2,7 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"bloodconnect/application"
@@ -156,12 +154,11 @@ func (s *requestService) SubmitRequest(ctx context.Context, userID domain.UserID
 		RequestID:   reqID,
 		CurrentRing: 1,
 	}
-	payloadBytes, _ := json.Marshal(payload)
 
 	job := &domain.Job{
 		ID:        domain.JobID("job_" + ulid.Make().String()),
 		Type:      domain.JobTypeWaveSearch,
-		Payload:   string(payloadBytes),
+		Payload:   payload,
 		Status:    domain.JobStatusPending,
 		RunAt:     runAt,
 		CreatedAt: now,
@@ -184,8 +181,30 @@ func (s *requestService) RespondToRequest(ctx context.Context, requestID domain.
 	userID, _ := ctx.Value(domain.UserIDKey).(domain.UserID)
 	reqLogger := s.getReqLogger(ctx, requestID)
 
+	// fail: respond to a non-existent request
+	req, err := s.repo.GetRequestByID(ctx, requestID)
+	if err != nil {
+		return err
+	}
+	if req == nil {
+		return domain.ErrRequestNotFound
+	}
+
+	// fail: accept their own request
+	if req.UserID == userID {
+		return domain.ErrCannotActOnOwnRequest
+	}
+
+	if req.Status != domain.RequestStatusPending {
+		return domain.ErrRequestAlreadyClosed
+	}
+
+	if action != domain.ActionStatusAccepted && action != domain.ActionStatusDeclined {
+		return domain.ErrUnauthorized
+	}
+
 	if action == domain.ActionStatusAccepted {
-		if err := s.checkDonationEligibility(ctx, userID, requestID); err != nil {
+		if err := s.checkDonationEligibility(ctx, userID, req); err != nil {
 			return err
 		}
 	}
@@ -210,120 +229,81 @@ func (s *requestService) RespondToRequest(ctx context.Context, requestID domain.
 
 	if action == domain.ActionStatusAccepted {
 		reqLogger.Info("User accepted donation request", zap.String("actioned_user_id", string(userID)))
-		req, err := s.repo.GetRequestByID(ctx, requestID)
-		if err == nil && req != nil {
-			metadata := domain.DonationAcceptanceMetadata{RequestID: string(requestID), DonorID: string(userID)}
-			metadataBytes, _ := json.Marshal(metadata)
-			
-			job := &domain.Job{
-				ID:        domain.JobID("notif_" + ulid.Make().String()),
-				Type:      "notification",
-				Payload:   string(metadataBytes),
-				Status:    domain.JobStatusPending,
-				CreatedAt: domain.Now(),
-				UpdatedAt: domain.Now(),
-			}
+		metadata := domain.DonationAcceptanceMetadata{RequestID: string(requestID), DonorID: string(userID)}
+		title := "Donation Request Accepted"
+		content := "A user has accepted your request to donate blood."
 
-			// We need to pass the fact that this is a DonationRequestAcceptance
-			// I'll wrap the payload to include the notification type
-			payload := map[string]interface{}{
-				"type": domain.NotificationTypeDonationRequestAcceptance,
-				"recipient": req.UserID,
-				"title": "Donation Request Accepted",
-				"content": "A user has accepted your request to donate blood.",
-				"metadata": metadata,
-			}
-			payloadBytes, _ := json.Marshal(payload)
-			job.Payload = string(payloadBytes)
-
-			if err := s.queue.Enqueue(ctx, job); err != nil {
-				reqLogger.Error("Failed to enqueue notification job", zap.Error(err))
-			}
-		}
-	} else if action == domain.ActionStatusDonated {
-		reqLogger.Info("User completed donation", zap.String("actioned_user_id", string(userID)))
-		// Update user's last donation date
-		health := &domain.UserHealth{
-			UserID:    userID,
-			InfoType:  domain.InfoTypeLastDonation,
-			Details:   time.Now().UTC().Format("2006-01-02"),
-			CreatedAt: domain.Now(),
-			UpdatedAt: domain.Now(),
-		}
-		if err := s.userRepo.UpdateUserHealth(ctx, health); err != nil {
-			reqLogger.Error("Failed to update user last donation date", zap.Error(err))
+		if _, err := s.notifService.Submit(ctx, domain.NotificationTypeDonationRequestAcceptance, req.UserID, title, content, metadata); err != nil {
+			reqLogger.Error("Failed to submit notification", zap.Error(err))
 		}
 	}
 
 	if prevState != nil && prevState.Action == domain.ActionStatusAccepted && action == domain.ActionStatusDeclined {
 		reqLogger.Info("User revoked acceptance, checking if new search is needed", zap.String("actioned_user_id", string(userID)))
-		req, err := s.repo.GetRequestByID(ctx, requestID)
-		if err == nil && req != nil && req.Status == domain.RequestStatusPending {
-			actionedUsers, _ := s.repo.GetActionedUsers(ctx, requestID)
-			acceptedCount := 0
-			for _, u := range actionedUsers {
-				if u.Action == domain.ActionStatusAccepted {
-					acceptedCount++
-				}
+		actionedUsers, _ := s.repo.GetActionedUsers(ctx, requestID)
+		acceptedCount := 0
+		for _, u := range actionedUsers {
+			if u.Action == domain.ActionStatusAccepted {
+				acceptedCount++
 			}
+		}
 
-			if acceptedCount < req.BagCount {
-				reqLogger.Info("Accepted count below requirement, triggering new search wave")
-				payload := domain.WaveSearchPayload{
-					RequestID:   requestID,
-					CurrentRing: 1,
-				}
-				payloadBytes, _ := json.Marshal(payload)
-				job := &domain.Job{
-					ID:        domain.JobID("job_" + ulid.Make().String()),
-					Type:      domain.JobTypeWaveSearch,
-					Payload:   string(payloadBytes),
-					Status:    domain.JobStatusPending,
-					RunAt:     domain.Now(),
-					CreatedAt: domain.Now(),
-					UpdatedAt: domain.Now(),
-				}
-				_ = s.queue.Enqueue(ctx, job)
+		if acceptedCount < req.BagCount {
+			reqLogger.Info("Accepted count below requirement, triggering new search wave")
+			payload := domain.WaveSearchPayload{
+				RequestID:   requestID,
+				CurrentRing: 1,
 			}
+			job := &domain.Job{
+				ID:        domain.JobID("job_" + ulid.Make().String()),
+				Type:      domain.JobTypeWaveSearch,
+				Payload:   payload,
+				Status:    domain.JobStatusPending,
+				RunAt:     domain.Now(),
+				CreatedAt: domain.Now(),
+				UpdatedAt: domain.Now(),
+			}
+			_ = s.queue.Enqueue(ctx, job)
 		}
 	}
 
 	return nil
 }
 
-func (s *requestService) checkDonationEligibility(ctx context.Context, userID domain.UserID, requestID domain.RequestID) error {
+func (s *requestService) checkDonationEligibility(ctx context.Context, userID domain.UserID, req *domain.DonationRequest) error {
 	now := time.Now().UTC()
 	since := now.Add(-time.Duration(s.config.MinimumDonationWaitDays) * 24 * time.Hour)
-	sinceISO := domain.ISOTimestamp(since.Format("2006-01-02T15:04:05.000Z"))
 
-	// Check recent actions (Accepted or Donated)
-	actions := []domain.ActionStatus{domain.ActionStatusAccepted, domain.ActionStatusDonated}
-	recentActions, err := s.repo.GetUserRecentActions(ctx, userID, actions, sinceISO)
+	// fail: accept an incompatible blood type request
+	health, err := s.userRepo.GetUserHealth(ctx, userID)
 	if err == nil {
-		for _, ra := range recentActions {
-			if ra.RequestID != requestID {
-				return domain.ErrDonationWaitPeriodNotMet
+		for _, h := range health {
+			if h.InfoType == domain.InfoTypeBloodType {
+				donorType := domain.BloodType(h.Details)
+				if !s.isCompatible(donorType, req.BloodType) {
+					return domain.ErrIncompatibleBloodType
+				}
 			}
 		}
 	}
 
-	// Check last_donation_date in user health
-	health, err := s.userRepo.GetUserHealth(ctx, userID)
+	// fail: donation request accepted and that request state is pending (already have a pending acceptance)
+	sinceISO := domain.ISOTimestamp(since.Format("2006-01-02T15:04:05.000Z"))
+	actions := []domain.ActionStatus{domain.ActionStatusAccepted}
+	recentActions, err := s.repo.GetUserRecentActions(ctx, userID, actions, sinceISO)
+	if err == nil {
+		if len(recentActions) > 0 {
+			return domain.ErrPendingRequestExists
+		}
+	}
+
+	// fail: last donation date is not within our expected range
 	if err == nil {
 		for _, h := range health {
 			if h.InfoType == domain.InfoTypeLastDonation {
 				lastDonated, err := time.Parse("2006-01-02", h.Details)
 				if err == nil && lastDonated.After(since) {
 					return domain.ErrDonationWaitPeriodNotMet
-				}
-			}
-			if h.InfoType == domain.InfoTypeBloodType {
-				donorType := domain.BloodType(h.Details)
-				req, err := s.repo.GetRequestByID(ctx, requestID)
-				if err == nil && req != nil {
-					if !s.isCompatible(donorType, req.BloodType) {
-						return fmt.Errorf("blood type %s is not compatible with request for %s", donorType, req.BloodType)
-					}
 				}
 			}
 		}

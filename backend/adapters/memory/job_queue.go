@@ -47,7 +47,6 @@ func (q *inMemoryJobQueue) deliver(job *domain.Job) {
 		select {
 		case c <- job:
 		default:
-			// Buffer full
 		}
 	}
 }
@@ -60,17 +59,14 @@ func (q *inMemoryJobQueue) Consume(ctx context.Context, jobType domain.JobType) 
 		ch := make(chan *domain.Job, 100)
 		q.chans[jobType] = ch
 		
-		// Drain existing jobs into the channel
 	drainLoop:
 		for _, job := range q.jobs[jobType] {
 			select {
 			case ch <- job:
 			default:
-				// Buffer full, stop draining
 				break drainLoop
 			}
 		}
-		// Clear jobs as they are now in the channel
 		q.jobs[jobType] = nil
 	}
 	

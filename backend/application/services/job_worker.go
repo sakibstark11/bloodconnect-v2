@@ -69,13 +69,10 @@ func NewJobWorkerService(
 func (s *jobWorkerService) Start(ctx context.Context) {
 	s.logger.Info("Starting background job worker with RabbitMQ...")
 	
-	// Start consumer for WaveSearch jobs
 	go s.runConsumer(ctx, domain.JobTypeWaveSearch)
 	
-	// Start consumer for Notification jobs
 	go s.runConsumer(ctx, domain.JobTypeNotification)
 	
-	// Start consumer for CheckResponses jobs
 	go s.runConsumer(ctx, domain.JobTypeCheckResponses)
 }
 
@@ -104,7 +101,7 @@ func (s *jobWorkerService) runConsumer(ctx context.Context, jobType domain.JobTy
 
 		if processErr != nil {
 			jobLogger.Error("Job failed", zap.Error(processErr))
-			// In a real system, we might nack or move to DLQ
+			// TODO: DLQ
 		} else {
 			jobLogger.Info("Job processed successfully")
 		}
@@ -114,7 +111,6 @@ func (s *jobWorkerService) runConsumer(ctx context.Context, jobType domain.JobTy
 func (s *jobWorkerService) processNotification(ctx context.Context, job *domain.Job, jobLogger *zap.Logger) error {
 	payload, ok := job.Payload.(map[string]interface{})
 	if !ok {
-		// Try unmarshalling if it's a string (e.g. from RabbitMQ)
 		if str, ok := job.Payload.(string); ok {
 			if err := json.Unmarshal([]byte(str), &payload); err != nil {
 				return err
@@ -130,7 +126,6 @@ func (s *jobWorkerService) processNotification(ctx context.Context, job *domain.
 	}
 
 	notifID := domain.NotificationID(notifIDStr)
-	// Fetch notification from repo
 	notif, err := s.notifRepo.GetNotificationByID(ctx, notifID)
 	if err != nil {
 		return err

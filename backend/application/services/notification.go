@@ -43,7 +43,6 @@ func (s *notificationService) Submit(ctx context.Context, notifType domain.Notif
 		return "", err
 	}
 
-	// Enqueue job for background processing
 	_ = s.queue.Enqueue(ctx, &domain.Job{
 		ID:      domain.JobID("job_" + ulid.Make().String()),
 		Type:    domain.JobTypeNotification,

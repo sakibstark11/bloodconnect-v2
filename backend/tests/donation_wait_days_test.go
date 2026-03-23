@@ -34,7 +34,6 @@ func TestDonationWaitDays(t *testing.T) {
 		t.Errorf("Expected User 2 to be allowed to decline Request 2, but got error: %v", err)
 	}
 
-	// Now decline Request 1 and try to accept Request 2 again
 	err = ts.reqService.RespondToRequest(ctx2, u2, reqID1, domain.ActionStatusDeclined)
 	if err != nil {
 		t.Fatalf("Expected User 2 to be allowed to decline Request 1, but got error: %v", err)
@@ -57,7 +56,6 @@ func TestUnauthorizedDonatedAction(t *testing.T) {
 
 	ctx2 := context.WithValue(ctx, domain.UserIDKey, u2)
 
-	// User tries to donate for Request 1 (should fail)
 	err := ts.reqService.RespondToRequest(ctx2, u2, reqID1, domain.ActionStatusDonated)
 	if err == nil {
 		t.Fatalf("Expected Donated action to be REJECTED, but it succeeded")

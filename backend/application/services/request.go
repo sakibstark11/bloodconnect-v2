@@ -117,7 +117,6 @@ func (s *requestService) CancelRequest(ctx context.Context, userID domain.UserID
 }
 
 func (s *requestService) SubmitRequest(ctx context.Context, userID domain.UserID, bloodType domain.BloodType, desc, reqInfo, locName string, lat, lng float64, count int, requiredBy domain.ISOTimestamp) (domain.RequestID, error) {
-	// fail fast: user doesn't exist
 	user, err := s.userRepo.GetUserByID(ctx, userID)
 	if err != nil {
 		return "", err
@@ -190,7 +189,6 @@ func (s *requestService) SubmitRequest(ctx context.Context, userID domain.UserID
 func (s *requestService) RespondToRequest(ctx context.Context, userID domain.UserID, requestID domain.RequestID, action domain.ActionStatus) error {
 	reqLogger := s.getReqLogger(ctx, requestID)
 
-	// fail: respond to a non-existent request
 	req, err := s.repo.GetRequestByID(ctx, requestID)
 	if err != nil {
 		return err
@@ -296,7 +294,6 @@ func (s *requestService) checkDonationEligibility(ctx context.Context, userID do
 		}
 	}
 
-	// fail: donation request accepted and that request state is pending (already have a pending acceptance)
 	sinceISO := domain.ISOTimestamp(since.Format("2006-01-02T15:04:05.000Z"))
 	actions := []domain.ActionStatus{domain.ActionStatusAccepted}
 	recentActions, err := s.repo.GetUserRecentActions(ctx, userID, actions, sinceISO)
@@ -310,8 +307,6 @@ func (s *requestService) checkDonationEligibility(ctx context.Context, userID do
 }
 
 func (s *requestService) isCompatible(donor, recipient domain.BloodType) bool {
-	// Compatibility Matrix
-	// Recipient -> can receive from
 	matrix := map[domain.BloodType][]domain.BloodType{
 		domain.BloodTypeAPos:  {domain.BloodTypeAPos, domain.BloodTypeANeg, domain.BloodTypeOPos, domain.BloodTypeONeg},
 		domain.BloodTypeANeg:  {domain.BloodTypeANeg, domain.BloodTypeONeg},

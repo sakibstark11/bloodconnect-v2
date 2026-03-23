@@ -48,7 +48,6 @@ export function LoginForm() {
       login(data.token)
       navigate("/")
     } else {
-      // Handle login error
       console.error("Login failed")
     }
   }

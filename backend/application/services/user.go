@@ -31,7 +31,6 @@ func NewUserService(repo application.UserRepository, config *application.AppConf
 }
 
 func (s *userService) Signup(ctx context.Context, name, email, password, phone string) (domain.UserID, error) {
-	// fail fast: email already exists
 	existing, _ := s.repo.GetUserAuthByEmail(ctx, email)
 	if existing != nil {
 		return "", domain.ErrEmailAlreadyInUse

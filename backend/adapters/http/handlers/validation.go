@@ -56,7 +56,6 @@ func RespondWithError(w http.ResponseWriter, err error) {
 		message = "Conflict"
 		details = err.Error()
 	default:
-		// Check for specific unauthorized messages if they aren't domain errors yet
 		if err.Error() == "unauthorized to cancel this request" {
 			statusCode = http.StatusForbidden
 			message = "Permission denied"

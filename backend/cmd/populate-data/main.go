@@ -192,8 +192,6 @@ func (c *client) respondToRequest(requestID string, session userSession, action 
 	_, err := c.doRequest(http.MethodPost, path, session.Token, payload)
 	if err != nil {
 		log.Printf("Response failed | Req: %s | User: %s | Action: %s | Err: %v", requestID, session.ID, action, err)
-	} else {
-		log.Printf("Response recorded | Req: %s | User: %s | Action: %s", requestID, session.ID, action)
 	}
 }
 

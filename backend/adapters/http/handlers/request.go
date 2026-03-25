@@ -99,7 +99,7 @@ type DonationRequestResponse struct {
 	UpdatedAt      string               `json:"updated_at"`
 }
 
-func mapDonationRequestToResponse(req domain.DonationRequest) DonationRequestResponse {
+func mapDonationRequestToResponse(req *domain.DonationRequest) DonationRequestResponse {
 	return DonationRequestResponse{
 		ID:             string(req.ID),
 		UserID:         string(req.UserID),
@@ -147,7 +147,7 @@ func mapExtendedDonationRequestToResponse(req *domain.ExtendedDonationRequest) E
 		notifiedUsers[i] = mapRequestActionedUserToResponse(u)
 	}
 	return ExtendedDonationRequestResponse{
-		Request:       mapDonationRequestToResponse(*req.Request),
+		Request:       mapDonationRequestToResponse(req.Request),
 		NotifiedUsers: notifiedUsers,
 	}
 }
@@ -176,7 +176,7 @@ func (h *RequestHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if requests == nil {
-		requests = []domain.DonationRequest{}
+		requests = []*domain.DonationRequest{}
 	}
 
 	var newLastID domain.RequestID

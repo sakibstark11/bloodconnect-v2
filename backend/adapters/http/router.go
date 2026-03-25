@@ -33,7 +33,8 @@ func SetupRouter(
 
 	mux.Handle("GET /users/me", auth(http.HandlerFunc(uh.GetMe)))
 	mux.Handle("PUT /users/me/health", auth(http.HandlerFunc(uh.UpdateHealth)))
-	mux.Handle("PUT /users/me/location", auth(http.HandlerFunc(uh.UpdateLocation)))
+	mux.Handle("POST /users/me/locations", auth(http.HandlerFunc(uh.AddLocation)))
+	mux.Handle("DELETE /users/me/locations/{h3hex}", auth(http.HandlerFunc(uh.DeleteLocation)))
 
 	mux.Handle("GET /notifications", auth(http.HandlerFunc(nh.GetForMe)))
 

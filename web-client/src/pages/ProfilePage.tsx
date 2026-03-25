@@ -5,45 +5,51 @@ import MapView from '@/components/MapView';
 import type { User } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MapPin, Heart, ShieldPlus, Loader2 } from 'lucide-react';
+import { MapPin, Heart, ShieldPlus, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ProfilePage() {
   const { token } = useAuth();
   const [user, setUser] = useState<User | null>(null);
-  const [location, setLocation] = useState<{ lat: number; lng: number; hex: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (token) {
-      Promise.all([
-        api.auth.getMe(token),
-        api.user.updateLocation(token, { lat: 0, lng: 0 }).catch(() => null) // Dummy call to trigger location fetch if we had a GET endpoint
-      ]).then(([u]) => {
-        setUser(u);
-        // Placeholder for user location if we had it
-        setLocation({ lat: 23.8103, lng: 90.4125, hex: "89608c2a8c7ffff" }); 
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      api.auth.getMe(token)
+        .then((u) => {
+          setUser(u);
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
     }
   }, [token]);
 
-  const handleUpdateLocation = async (lat: number, lng: number) => {
+  const handleAddLocation = async (lat: number, lng: number) => {
     if (!token) return;
     setSaving(true);
     try {
-      await api.user.updateLocation(token, { lat, lng });
-      setLocation(prev => prev ? { ...prev, lat, lng } : null);
-      toast.success("Location updated successfully");
-    } catch (err) {
-      toast.error("Failed to update location");
+      await api.user.addLocation(token, { lat, lng });
+      const updatedUser = await api.auth.getMe(token);
+      setUser(updatedUser);
+      toast.success("Location added successfully");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to add location");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteLocation = async (h3hex: string) => {
+    if (!token) return;
+    try {
+      await api.user.deleteLocation(token, h3hex);
+      const updatedUser = await api.auth.getMe(token);
+      setUser(updatedUser);
+      toast.success("Location deleted successfully");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete location");
     }
   };
 
@@ -93,24 +99,40 @@ export default function ProfilePage() {
             <CardContent className="flex flex-col gap-4">
               <div className="space-y-2">
                 <Label>Blood Type</Label>
-                <Select defaultValue="O+">
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Select blood type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(t => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="p-3 bg-destructive/10 rounded-md border border-destructive/20 text-destructive font-black text-center text-4xl">
+                  {user.health?.find(h => h.info_type === 'blood_type')?.details || '??'}
+                </div>
+                <p className="text-xs text-muted-foreground text-center italic">Blood type can only be confirmed once.</p>
               </div>
-              <div className="space-y-2">
-                <Label>Weight (kg)</Label>
-                <Input type="number" placeholder="70" className="bg-background/50" />
-              </div>
-              <Button className="w-full mt-2" onClick={() => toast.info("Profile saving implemented in next version")}>
-                Save Health Profile
-              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card/50 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-primary" />
+                Your Locations
+              </CardTitle>
+              <CardDescription>At least one is required</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {user.locations?.map((loc) => (
+                <div key={loc.h3_hex} className="flex items-center justify-between p-2 bg-background/50 rounded-md text-sm border border-border/50">
+                  <div className="flex flex-col">
+                    <span className="font-mono text-[10px] text-muted-foreground">{loc.h3_hex}</span>
+                    <span>{loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}</span>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                    onClick={() => handleDeleteLocation(loc.h3_hex)}
+                    disabled={(user.locations?.length || 0) <= 1}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>
@@ -122,25 +144,25 @@ export default function ProfilePage() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <MapPin className="h-5 w-5 text-primary" />
-                    Preferred Location
+                    Preferred Donation Locations
                   </CardTitle>
-                  <CardDescription>Click on the map to set your usual donation area</CardDescription>
+                  <CardDescription>Click on the map to add a new donation area</CardDescription>
                 </div>
                 {saving && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
               </div>
             </CardHeader>
             <CardContent className="p-0 flex-1 relative">
               <MapView 
-                markers={location ? [{
-                  id: user.id,
-                  lat: location.lat,
-                  lng: location.lng,
-                  hex: location.hex,
+                markers={user.locations?.map(loc => ({
+                  id: loc.h3_hex,
+                  lat: loc.lat,
+                  lng: loc.lng,
+                  hex: loc.h3_hex,
                   status: 'Fulfilled',
                   type: 'user'
-                }] : []}
-                onClickMap={handleUpdateLocation}
-                center={location ? [location.lat, location.lng] : undefined}
+                })) || []}
+                onClickMap={handleAddLocation}
+                center={user.locations && user.locations.length > 0 ? [user.locations[0].lat, user.locations[0].lng] : undefined}
                 zoom={14}
               />
             </CardContent>

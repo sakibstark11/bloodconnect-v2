@@ -15,13 +15,23 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Droplets, Loader2 } from "lucide-react"
 import { Link, useNavigate } from "react-router-dom"
 import { api } from "@/lib/api"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 const formSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   phone: z.string().min(10),
   password: z.string().min(8),
+  blood_type: z.string().min(2),
+  lat: z.number(),
+  lng: z.number(),
 })
 
 export default function SignupPage() {
@@ -29,13 +39,36 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", email: "", phone: "", password: "" },
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      password: "",
+      blood_type: "",
+      lat: 0,
+      lng: 0,
+    },
   })
 
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        form.setValue("lat", position.coords.latitude)
+        form.setValue("lng", position.coords.longitude)
+      }, (error) => {
+        console.error("Error getting location:", error)
+      })
+    }
+  }, [form])
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (values.lat === 0 && values.lng === 0) {
+      alert("Please allow location access to sign up.")
+      return
+    }
     setLoading(true)
     try {
-      await api.auth.signup(values)
+      await api.auth.signup(values as any)
       navigate("/login")
     } catch (err) {
       console.error(err)
@@ -100,6 +133,29 @@ export default function SignupPage() {
                     <FormItem>
                       <FormLabel>Password</FormLabel>
                       <FormControl><Input type="password" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="blood_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Blood Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select your blood type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((type) => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}

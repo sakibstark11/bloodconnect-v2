@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -30,41 +31,30 @@ func RespondWithError(w http.ResponseWriter, err error) {
 
 	statusCode := http.StatusInternalServerError
 	message := "Internal server error"
-	var details any
+	details := err.Error()
 
-	switch err {
-	case domain.ErrUnauthorized:
+	if errors.Is(err, domain.ErrUnauthorized) {
 		statusCode = http.StatusUnauthorized
 		message = "Unauthorized"
-	case domain.ErrUserNotFound, domain.ErrRequestNotFound:
+	} else if errors.Is(err, domain.ErrUserNotFound) || errors.Is(err, domain.ErrRequestNotFound) {
 		statusCode = http.StatusNotFound
 		message = "Resource not found"
-		details = err.Error()
-	case domain.ErrIncompatibleBloodType, domain.ErrPendingRequestExists, domain.ErrDonationWaitPeriodNotMet, domain.ErrBloodTypeUpdateDenied:
+	} else if errors.Is(err, domain.ErrIncompatibleBloodType) || 
+	          errors.Is(err, domain.ErrPendingRequestExists) || 
+			  errors.Is(err, domain.ErrDonationWaitPeriodNotMet) || 
+			  errors.Is(err, domain.ErrBloodTypeUpdateDenied) ||
+			  errors.Is(err, domain.ErrLastLocationDeleteDenied) {
 		statusCode = http.StatusBadRequest
-		message = "Eligibility check failed"
-		details = err.Error()
-	case domain.ErrCannotActOnOwnRequest:
+		message = "Action denied"
+	} else if errors.Is(err, domain.ErrCannotActOnOwnRequest) {
 		statusCode = http.StatusForbidden
 		message = "Forbidden action"
-		details = err.Error()
-	case domain.ErrRequestAlreadyClosed:
+	} else if errors.Is(err, domain.ErrRequestAlreadyClosed) {
 		statusCode = http.StatusGone
 		message = "Request already closed"
-	case domain.ErrEmailAlreadyInUse:
+	} else if errors.Is(err, domain.ErrEmailAlreadyInUse) {
 		statusCode = http.StatusConflict
-		message = "Conflict"
-		details = err.Error()
-	default:
-		if err.Error() == "unauthorized to cancel this request" {
-			statusCode = http.StatusForbidden
-			message = "Permission denied"
-			details = err.Error()
-		} else if err.Error() == "email already in use" {
-			statusCode = http.StatusConflict
-			message = "Conflict"
-			details = err.Error()
-		}
+		message = "Email already in use"
 	}
 
 	RespondJSONError(w, statusCode, message, details)

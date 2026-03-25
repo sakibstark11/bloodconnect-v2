@@ -8,7 +8,14 @@ export interface User {
   email: string;
   phone: string;
   health?: { info_type: string; details: string }[];
+  locations?: UserLocation[];
   created_at: string;
+}
+
+export interface UserLocation {
+  lat: number;
+  lng: number;
+  h3_hex: string;
 }
 
 export interface DonationRequest {
@@ -72,4 +79,7 @@ export interface SignupRequest {
   email: string;
   phone: string;
   password: string;
+  blood_type: BloodType;
+  lat: number;
+  lng: number;
 }

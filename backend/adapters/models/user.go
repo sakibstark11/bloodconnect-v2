@@ -32,8 +32,6 @@ func (m *User) ToAuth() *domain.UserAuth {
 	}
 }
 
-
-
 func UserFromDomain(u *domain.User, hashedPassword string) *User {
 	return &User{
 		ID:        string(u.ID),
@@ -54,8 +52,8 @@ type UserHealth struct {
 	UpdatedAt string `gorm:"size:25"`
 }
 
-func (m *UserHealth) ToDomain() domain.UserHealth {
-	return domain.UserHealth{
+func (m *UserHealth) ToDomain() *domain.UserHealth {
+	return &domain.UserHealth{
 		UserID:    domain.UserID(m.UserID),
 		InfoType:  domain.InfoType(m.InfoType),
 		Details:   m.Details,
@@ -64,8 +62,8 @@ func (m *UserHealth) ToDomain() domain.UserHealth {
 	}
 }
 
-func UserHealthFromDomain(h *domain.UserHealth) UserHealth {
-	return UserHealth{
+func UserHealthFromDomain(h *domain.UserHealth) *UserHealth {
+	return &UserHealth{
 		UserID:    string(h.UserID),
 		InfoType:  string(h.InfoType),
 		Details:   h.Details,
@@ -78,7 +76,7 @@ type UserLocation struct {
 	UserID    string `gorm:"primaryKey;size:64"`
 	Lat       float64
 	Lng       float64
-	H3Hex     string `gorm:"index;size:20"`
+	H3Hex     string `gorm:"primaryKey;size:20"`
 	CreatedAt string `gorm:"size:25"`
 	UpdatedAt string `gorm:"size:25"`
 }

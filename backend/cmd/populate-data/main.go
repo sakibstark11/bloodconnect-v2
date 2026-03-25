@@ -132,11 +132,18 @@ func populateUser(c *client, index int) (userSession, error) {
 	password := "password123"
 	phone := fmt.Sprintf("+8801%d%04d", suffix%100, index%10000)
 
-	signupRes, err := c.doRequest(http.MethodPost, "/users/signup", "", map[string]string{
-		"name":     fmt.Sprintf("User %d", index),
-		"email":    email,
-		"password": password,
-		"phone":    phone,
+	lat := minLat + rand.Float64()*(maxLat-minLat)
+	lng := minLng + rand.Float64()*(maxLng-minLng)
+	bType := bloodTypes[rand.Intn(len(bloodTypes))]
+
+	signupRes, err := c.doRequest(http.MethodPost, "/users/signup", "", map[string]interface{}{
+		"name":       fmt.Sprintf("User %d", index),
+		"email":      email,
+		"password":   password,
+		"phone":      phone,
+		"blood_type": bType,
+		"lat":        lat,
+		"lng":        lng,
 	})
 	if err != nil {
 		return userSession{}, err
@@ -153,12 +160,10 @@ func populateUser(c *client, index int) (userSession, error) {
 	token := loginRes["token"].(string)
 	session := userSession{ID: uid, Token: token}
 
-	bType := bloodTypes[rand.Intn(len(bloodTypes))]
-	_ = c.updateHealth(session, "blood_type", bType)
-
-	lat := minLat + rand.Float64()*(maxLat-minLat)
-	lng := minLng + rand.Float64()*(maxLng-minLng)
-	_ = c.updateLocation(session, lat, lng)
+	// Maybe add one more random location
+	extraLat := minLat + rand.Float64()*(maxLat-minLat)
+	extraLng := minLng + rand.Float64()*(maxLng-minLng)
+	_ = c.addLocation(session, extraLat, extraLng)
 
 	return session, nil
 }
@@ -202,8 +207,8 @@ func (c *client) updateHealth(session userSession, infoType, details string) err
 	return err
 }
 
-func (c *client) updateLocation(session userSession, lat, lng float64) error {
-	_, err := c.doRequest(http.MethodPut, "/users/me/location", session.Token, map[string]interface{}{
+func (c *client) addLocation(session userSession, lat, lng float64) error {
+	_, err := c.doRequest(http.MethodPost, "/users/me/locations", session.Token, map[string]interface{}{
 		"lat": lat, "lng": lng,
 	})
 	return err

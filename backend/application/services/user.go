@@ -14,11 +14,12 @@ import (
 )
 
 type UserService interface {
-	Signup(ctx context.Context, name, email, password, phone string) (domain.UserID, error)
+	Signup(ctx context.Context, name, email, password, phone string, bloodType domain.BloodType, lat, lng float64) (domain.UserID, error)
 	Login(ctx context.Context, email, password string) (string, *domain.User, error)
-	GetMe(ctx context.Context, userID domain.UserID) (*domain.User, []domain.UserHealth, error)
+	GetMe(ctx context.Context, userID domain.UserID) (*domain.User, []*domain.UserHealth, []*domain.UserPreferredDonationLocation, error)
 	UpdateHealth(ctx context.Context, userID domain.UserID, infoType domain.InfoType, details string) error
-	UpdateLocation(ctx context.Context, userID domain.UserID, lat, lng float64) error
+	AddLocation(ctx context.Context, userID domain.UserID, lat, lng float64) error
+	DeleteLocation(ctx context.Context, userID domain.UserID, h3hex string) error
 }
 
 type userService struct {
@@ -30,8 +31,11 @@ func NewUserService(repo application.UserRepository, config *application.AppConf
 	return &userService{repo: repo, config: config}
 }
 
-func (s *userService) Signup(ctx context.Context, name, email, password, phone string) (domain.UserID, error) {
-	existing, _ := s.repo.GetUserAuthByEmail(ctx, email)
+func (s *userService) Signup(ctx context.Context, name, email, password, phone string, bloodType domain.BloodType, lat, lng float64) (domain.UserID, error) {
+	existing, err := s.repo.GetUserAuthByEmail(ctx, email)
+	if err != nil {
+		return "", err
+	}
 	if existing != nil {
 		return "", domain.ErrEmailAlreadyInUse
 	}
@@ -56,16 +60,45 @@ func (s *userService) Signup(ctx context.Context, name, email, password, phone s
 		return "", err
 	}
 
+	// Set initial blood type
+	health := &domain.UserHealth{
+		UserID:    id,
+		InfoType:  domain.InfoTypeBloodType,
+		Details:   string(bloodType),
+		CreatedAt: domain.Now(),
+		UpdatedAt: domain.Now(),
+	}
+	if err := s.repo.UpdateUserHealth(ctx, health); err != nil {
+		return id, err // User created but health set failed
+	}
+
+	// Set initial location
+	cell, err := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, s.config.H3HexResolution)
+	if err != nil {
+		return id, err
+	}
+	loc := &domain.UserPreferredDonationLocation{
+		UserID:    id,
+		Lat:       lat,
+		Lng:       lng,
+		H3Hex:     cell.String(),
+		CreatedAt: domain.Now(),
+		UpdatedAt: domain.Now(),
+	}
+	if err := s.repo.UpdateUserLocation(ctx, loc); err != nil {
+		return id, err // User and health created but location set failed
+	}
+
 	return id, nil
 }
 
 func (s *userService) Login(ctx context.Context, email, password string) (string, *domain.User, error) {
 
 	userAuth, err := s.repo.GetUserAuthByEmail(ctx, email)
-	switch {
-	case err != nil:
+	if err != nil {
 		return "", nil, err
-	case userAuth == nil:
+	}
+	if userAuth == nil {
 		return "", nil, domain.ErrUnauthorized
 	}
 
@@ -96,22 +129,26 @@ func (s *userService) generateToken(userID domain.UserID) (string, error) {
 	return token.SignedString([]byte(s.config.JWTSecret))
 }
 
-func (s *userService) GetMe(ctx context.Context, userID domain.UserID) (*domain.User, []domain.UserHealth, error) {
+func (s *userService) GetMe(ctx context.Context, userID domain.UserID) (*domain.User, []*domain.UserHealth, []*domain.UserPreferredDonationLocation, error) {
 	if userID == "" {
-		return nil, nil, domain.ErrUnauthorized
+		return nil, nil, nil, domain.ErrUnauthorized
 	}
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if user == nil {
-		return nil, nil, domain.ErrUserNotFound
+		return nil, nil, nil, domain.ErrUserNotFound
 	}
 	health, err := s.repo.GetUserHealth(ctx, userID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return user, health, nil
+	locations, err := s.repo.GetUserLocation(ctx, userID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return user, health, locations, nil
 }
 
 func (s *userService) UpdateHealth(ctx context.Context, userID domain.UserID, infoType domain.InfoType, details string) error {
@@ -128,13 +165,12 @@ func (s *userService) UpdateHealth(ctx context.Context, userID domain.UserID, in
 	}
 
 	if infoType == domain.InfoTypeBloodType {
-		health, err := s.repo.GetUserHealth(ctx, userID)
-		if err == nil {
-			for _, h := range health {
-				if h.InfoType == domain.InfoTypeBloodType && h.Details != "" {
-					return domain.ErrBloodTypeUpdateDenied
-				}
-			}
+		existing, err := s.repo.GetUserHealthByType(ctx, userID, domain.InfoTypeBloodType)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			return domain.ErrBloodTypeUpdateDenied
 		}
 	}
 
@@ -149,7 +185,7 @@ func (s *userService) UpdateHealth(ctx context.Context, userID domain.UserID, in
 	return s.repo.UpdateUserHealth(ctx, health)
 }
 
-func (s *userService) UpdateLocation(ctx context.Context, userID domain.UserID, lat, lng float64) error {
+func (s *userService) AddLocation(ctx context.Context, userID domain.UserID, lat, lng float64) error {
 	if userID == "" {
 		return domain.ErrUnauthorized
 	}
@@ -162,7 +198,10 @@ func (s *userService) UpdateLocation(ctx context.Context, userID domain.UserID, 
 		return domain.ErrUserNotFound
 	}
 
-	cell, _ := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, s.config.H3HexResolution)
+	cell, err := h3.LatLngToCell(h3.LatLng{Lat: lat, Lng: lng}, s.config.H3HexResolution)
+	if err != nil {
+		return err
+	}
 	loc := &domain.UserPreferredDonationLocation{
 		UserID:    userID,
 		Lat:       lat,
@@ -173,4 +212,21 @@ func (s *userService) UpdateLocation(ctx context.Context, userID domain.UserID, 
 	}
 
 	return s.repo.UpdateUserLocation(ctx, loc)
+}
+
+func (s *userService) DeleteLocation(ctx context.Context, userID domain.UserID, h3hex string) error {
+	if userID == "" {
+		return domain.ErrUnauthorized
+	}
+
+	locations, err := s.repo.GetUserLocation(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	if len(locations) <= 1 {
+		return domain.ErrLastLocationDeleteDenied
+	}
+
+	return s.repo.DeleteUserLocation(ctx, userID, h3hex)
 }

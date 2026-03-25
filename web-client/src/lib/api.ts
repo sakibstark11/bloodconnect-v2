@@ -80,7 +80,9 @@ export const api = {
   user: {
     updateHealth: (token: string, data: { info_type: string; details: string }): Promise<void> =>
       fetchWithToken('/users/me/health', token, { method: 'PUT', body: JSON.stringify(data) }),
-    updateLocation: (token: string, data: { lat: number; lng: number }): Promise<void> =>
-      fetchWithToken('/users/me/location', token, { method: 'PUT', body: JSON.stringify(data) }),
+    addLocation: (token: string, data: { lat: number; lng: number }): Promise<void> =>
+      fetchWithToken('/users/me/locations', token, { method: 'POST', body: JSON.stringify(data) }),
+    deleteLocation: (token: string, h3hex: string): Promise<void> =>
+      fetchWithToken(`/users/me/locations/${h3hex}`, token, { method: 'DELETE' }),
   }
 };

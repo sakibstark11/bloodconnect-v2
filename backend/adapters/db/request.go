@@ -35,7 +35,7 @@ func (r *requestRepository) GetRequestByID(ctx context.Context, id domain.Reques
 	return m.ToDomain(), nil
 }
 
-func (r *requestRepository) ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]domain.DonationRequest, error) {
+func (r *requestRepository) ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]*domain.DonationRequest, error) {
 	q := r.db.WithContext(ctx).Model(&models.Request{})
 
 	if filters.BloodType != "" {
@@ -57,9 +57,9 @@ func (r *requestRepository) ListRequests(ctx context.Context, filters applicatio
 		return nil, err
 	}
 
-	requests := make([]domain.DonationRequest, len(ms))
+	requests := make([]*domain.DonationRequest, len(ms))
 	for i, m := range ms {
-		requests[i] = *m.ToDomain()
+		requests[i] = m.ToDomain()
 	}
 	return requests, nil
 }
@@ -80,26 +80,26 @@ func (r *requestRepository) GetRequestState(ctx context.Context, requestID domai
 	return m.ToDomain(), nil
 }
 
-func (r *requestRepository) GetActionedUsers(ctx context.Context, requestID domain.RequestID) ([]domain.RequestState, error) {
+func (r *requestRepository) GetActionedUsers(ctx context.Context, requestID domain.RequestID) ([]*domain.RequestState, error) {
 	var ms []models.RequestState
 	if err := r.db.WithContext(ctx).Where("request_id = ?", string(requestID)).Find(&ms).Error; err != nil {
 		return nil, err
 	}
-	states := make([]domain.RequestState, len(ms))
+	states := make([]*domain.RequestState, len(ms))
 	for i, m := range ms {
-		states[i] = *m.ToDomain()
+		states[i] = m.ToDomain()
 	}
 	return states, nil
 }
 
-func (r *requestRepository) GetUserRecentActions(ctx context.Context, userID domain.UserID, actions []domain.ActionStatus, since domain.ISOTimestamp) ([]domain.RequestState, error) {
+func (r *requestRepository) GetUserRecentActions(ctx context.Context, userID domain.UserID, actions []domain.ActionStatus, since domain.ISOTimestamp) ([]*domain.RequestState, error) {
 	var ms []models.RequestState
 	if err := r.db.WithContext(ctx).Where("actioned_by_id = ? AND action IN ? AND updated_at >= ?", string(userID), actions, since).Find(&ms).Error; err != nil {
 		return nil, err
 	}
-	states := make([]domain.RequestState, len(ms))
+	states := make([]*domain.RequestState, len(ms))
 	for i, m := range ms {
-		states[i] = *m.ToDomain()
+		states[i] = m.ToDomain()
 	}
 	return states, nil
 }

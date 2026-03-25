@@ -24,14 +24,18 @@ func (h *UserHandler) RegisterPublicRoutes(mux *http.ServeMux) {
 func (h *UserHandler) RegisterMeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /", h.GetMe)
 	mux.HandleFunc("PUT /health", h.UpdateHealth)
-	mux.HandleFunc("PUT /location", h.UpdateLocation)
+	mux.HandleFunc("POST /locations", h.AddLocation)
+	mux.HandleFunc("DELETE /locations/{h3hex}", h.DeleteLocation)
 }
 
 type SignupRequest struct {
-	Name     string `json:"name"     validate:"required"`
-	Email    string `json:"email"    validate:"required,email"`
-	Password string `json:"password" validate:"required,min=6"`
-	Phone    string `json:"phone"    validate:"required"`
+	Name      string           `json:"name"       validate:"required"`
+	Email     string           `json:"email"      validate:"required,email"`
+	Password  string           `json:"password"   validate:"required,min=6"`
+	Phone     string           `json:"phone"      validate:"required"`
+	BloodType domain.BloodType `json:"blood_type" validate:"required"`
+	Lat       float64          `json:"lat"        validate:"required,latitude"`
+	Lng       float64          `json:"lng"        validate:"required,longitude"`
 }
 
 type SignupResponse struct {
@@ -49,7 +53,7 @@ func (h *UserHandler) Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := h.service.Signup(r.Context(), req.Name, req.Email, req.Password, req.Phone)
+	id, err := h.service.Signup(r.Context(), req.Name, req.Email, req.Password, req.Phone, req.BloodType, req.Lat, req.Lng)
 	if err != nil {
 		RespondWithError(w, err)
 		return
@@ -73,22 +77,38 @@ type UserHealthResponse struct {
 	Details  string `json:"details"`
 }
 
-type UserResponse struct {
-	ID        string               `json:"id"`
-	Name      string               `json:"name"`
-	Email     string               `json:"email"`
-	Phone     string               `json:"phone"`
-	Health    []UserHealthResponse `json:"health,omitempty"`
-	CreatedAt string               `json:"created_at"`
-	UpdatedAt string               `json:"updated_at"`
+type UserLocationResponse struct {
+	Lat   float64 `json:"lat"`
+	Lng   float64 `json:"lng"`
+	H3Hex string  `json:"h3_hex"`
 }
 
-func mapUserToResponse(u *domain.User, health []domain.UserHealth) UserResponse {
+type UserResponse struct {
+	ID        string                 `json:"id"`
+	Name      string                 `json:"name"`
+	Email     string                 `json:"email"`
+	Phone     string                 `json:"phone"`
+	Health    []UserHealthResponse   `json:"health,omitempty"`
+	Locations []UserLocationResponse `json:"locations,omitempty"`
+	CreatedAt string                 `json:"created_at"`
+	UpdatedAt string                 `json:"updated_at"`
+}
+
+func mapUserToResponse(u *domain.User, health []*domain.UserHealth, locations []*domain.UserPreferredDonationLocation) UserResponse {
 	healthRes := make([]UserHealthResponse, len(health))
 	for i, h := range health {
 		healthRes[i] = UserHealthResponse{
 			InfoType: string(h.InfoType),
 			Details:  h.Details,
+		}
+	}
+
+	locRes := make([]UserLocationResponse, len(locations))
+	for i, l := range locations {
+		locRes[i] = UserLocationResponse{
+			Lat:   l.Lat,
+			Lng:   l.Lng,
+			H3Hex: l.H3Hex,
 		}
 	}
 
@@ -98,6 +118,7 @@ func mapUserToResponse(u *domain.User, health []domain.UserHealth) UserResponse 
 		Email:     u.Email,
 		Phone:     u.Phone,
 		Health:    healthRes,
+		Locations: locRes,
 		CreatedAt: string(u.CreatedAt),
 		UpdatedAt: string(u.UpdatedAt),
 	}
@@ -130,12 +151,12 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, health, err := h.service.GetMe(r.Context(), userID)
+	user, health, locations, err := h.service.GetMe(r.Context(), userID)
 	if err != nil {
 		RespondWithError(w, err)
 		return
 	}
-	RespondJSON(w, http.StatusOK, mapUserToResponse(user, health))
+	RespondJSON(w, http.StatusOK, mapUserToResponse(user, health, locations))
 }
 
 type UpdateHealthRequest struct {
@@ -168,19 +189,19 @@ func (h *UserHandler) UpdateHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type UpdateLocationRequest struct {
+type AddLocationRequest struct {
 	Lat float64 `json:"lat" validate:"required,latitude"`
 	Lng float64 `json:"lng" validate:"required,longitude"`
 }
 
-func (h *UserHandler) UpdateLocation(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) AddLocation(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(domain.UserIDKey).(domain.UserID)
 	if !ok || userID == "" {
 		RespondWithError(w, domain.ErrUnauthorized)
 		return
 	}
 
-	var req UpdateLocationRequest
+	var req AddLocationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		RespondJSONError(w, http.StatusBadRequest, "Invalid JSON payload", err.Error())
 		return
@@ -190,7 +211,28 @@ func (h *UserHandler) UpdateLocation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.UpdateLocation(r.Context(), userID, req.Lat, req.Lng); err != nil {
+	if err := h.service.AddLocation(r.Context(), userID, req.Lat, req.Lng); err != nil {
+		RespondWithError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *UserHandler) DeleteLocation(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(domain.UserIDKey).(domain.UserID)
+	if !ok || userID == "" {
+		RespondWithError(w, domain.ErrUnauthorized)
+		return
+	}
+
+	h3hex := r.PathValue("h3hex")
+	if h3hex == "" {
+		RespondJSONError(w, http.StatusBadRequest, "Missing h3hex in URL", nil)
+		return
+	}
+
+	if err := h.service.DeleteLocation(r.Context(), userID, h3hex); err != nil {
 		RespondWithError(w, err)
 		return
 	}

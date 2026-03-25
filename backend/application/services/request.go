@@ -19,7 +19,7 @@ type RequestService interface {
 	CancelRequest(ctx context.Context, userID domain.UserID, requestID domain.RequestID) error
 	GetRequest(ctx context.Context, requestID domain.RequestID) (*domain.DonationRequest, error)
 	GetExtendedRequest(ctx context.Context, requestID domain.RequestID) (*domain.ExtendedDonationRequest, error)
-	ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]domain.DonationRequest, error)
+	ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]*domain.DonationRequest, error)
 }
 
 type requestService struct {
@@ -54,7 +54,7 @@ func (s *requestService) getReqLogger(ctx context.Context, requestID domain.Requ
 	return l
 }
 
-func (s *requestService) ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]domain.DonationRequest, error) {
+func (s *requestService) ListRequests(ctx context.Context, filters application.RequestFilters, lastRequestID domain.RequestID, pageSize int) ([]*domain.DonationRequest, error) {
 	return s.repo.ListRequests(ctx, filters, lastRequestID, pageSize)
 }
 
@@ -78,10 +78,11 @@ func (s *requestService) GetExtendedRequest(ctx context.Context, requestID domai
 
 	var notifiedUsers []domain.RequestActionedUser
 	for _, state := range actionedStates {
-		loc, err := s.userRepo.GetUserLocation(ctx, state.ActionedByID)
-		if err != nil || loc == nil {
+		locs, err := s.userRepo.GetUserLocation(ctx, state.ActionedByID)
+		if err != nil || len(locs) == 0 {
 			continue
 		}
+		loc := locs[0]
 		notifiedUsers = append(notifiedUsers, domain.RequestActionedUser{
 			UserID: state.ActionedByID,
 			Action: state.Action,

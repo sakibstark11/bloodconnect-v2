@@ -9,6 +9,7 @@ import (
 	"bloodconnect/application/domain"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type userRepository struct {
@@ -20,7 +21,6 @@ func NewUserRepository(db *gorm.DB) application.UserRepository {
 }
 
 func (r *userRepository) CreateUser(ctx context.Context, user *domain.User, hashedPassword string) error {
-
 	return r.db.WithContext(ctx).Create(models.UserFromDomain(user, hashedPassword)).Error
 }
 
@@ -77,38 +77,67 @@ func (r *userRepository) GetUserAuthByEmail(ctx context.Context, email string) (
 
 func (r *userRepository) UpdateUserHealth(ctx context.Context, health *domain.UserHealth) error {
 	m := models.UserHealthFromDomain(health)
-	return r.db.WithContext(ctx).Save(&m).Error
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		UpdateAll: true,
+	}).Create(m).Error
 }
 
-func (r *userRepository) GetUserHealth(ctx context.Context, userID domain.UserID) ([]domain.UserHealth, error) {
+func (r *userRepository) GetUserHealth(ctx context.Context, userID domain.UserID) ([]*domain.UserHealth, error) {
 	var ms []models.UserHealth
 	if err := r.db.WithContext(ctx).Where("user_id = ?", string(userID)).Find(&ms).Error; err != nil {
 		return nil, err
 	}
-	result := make([]domain.UserHealth, len(ms))
+	result := make([]*domain.UserHealth, len(ms))
 	for i, m := range ms {
 		result[i] = m.ToDomain()
 	}
 	return result, nil
 }
 
-func (r *userRepository) UpdateUserLocation(ctx context.Context, loc *domain.UserPreferredDonationLocation) error {
-	return r.db.WithContext(ctx).Save(models.UserLocationFromDomain(loc)).Error
-}
+func (r *userRepository) GetUserHealthByType(ctx context.Context, userID domain.UserID, infoType domain.InfoType) (*domain.UserHealth, error) {
+	var m models.UserHealth
+	res := r.db.WithContext(ctx).
+		Where("user_id = ? AND info_type = ?",
+			string(userID), string(infoType)).
+		First(&m)
 
-func (r *userRepository) GetUserLocation(ctx context.Context, userID domain.UserID) (*domain.UserPreferredDonationLocation, error) {
-	var m models.UserLocation
-	res := r.db.WithContext(ctx).Where("user_id = ?", string(userID)).First(&m)
 	if res.Error != nil {
 		if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 		return nil, res.Error
 	}
+
 	return m.ToDomain(), nil
 }
 
-func (r *userRepository) GetEligibleUsersInHexes(ctx context.Context, hexes []string, bloodType domain.BloodType, count int, excludedUserIDs []domain.UserID) ([]domain.User, error) {
+func (r *userRepository) UpdateUserLocation(ctx context.Context, loc *domain.UserPreferredDonationLocation) error {
+	m := models.UserLocationFromDomain(loc)
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
+		UpdateAll: true,
+	}).Create(m).Error
+}
+
+func (r *userRepository) GetUserLocation(ctx context.Context, userID domain.UserID) ([]*domain.UserPreferredDonationLocation, error) {
+	var ms []models.UserLocation
+	res := r.db.WithContext(ctx).Where("user_id = ?", string(userID)).Find(&ms)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	result := make([]*domain.UserPreferredDonationLocation, len(ms))
+	for i, m := range ms {
+		result[i] = m.ToDomain()
+	}
+	return result, nil
+}
+
+func (r *userRepository) DeleteUserLocation(ctx context.Context, userID domain.UserID, h3hex string) error {
+	return r.db.WithContext(ctx).
+		Where("user_id = ? AND h3_hex = ?", string(userID), h3hex).
+		Delete(&models.UserLocation{}).Error
+}
+
+func (r *userRepository) GetEligibleUsersInHexes(ctx context.Context, hexes []string, bloodType domain.BloodType, count int, excludedUserIDs []domain.UserID) ([]*domain.User, error) {
 	var userIDs []string
 	q := r.db.WithContext(ctx).Model(&models.UserLocation{}).Where("h3_hex IN ?", hexes)
 	if len(excludedUserIDs) > 0 {
@@ -123,7 +152,7 @@ func (r *userRepository) GetEligibleUsersInHexes(ctx context.Context, hexes []st
 		return nil, err
 	}
 	if len(userIDs) == 0 {
-		return []domain.User{}, nil
+		return []*domain.User{}, nil
 	}
 
 	var eligibleUserIDs []string
@@ -133,7 +162,7 @@ func (r *userRepository) GetEligibleUsersInHexes(ctx context.Context, hexes []st
 		return nil, err
 	}
 	if len(eligibleUserIDs) == 0 {
-		return []domain.User{}, nil
+		return []*domain.User{}, nil
 	}
 
 	var ms []models.User
@@ -143,9 +172,9 @@ func (r *userRepository) GetEligibleUsersInHexes(ctx context.Context, hexes []st
 		Find(&ms).Error; err != nil {
 		return nil, err
 	}
-	users := make([]domain.User, len(ms))
+	users := make([]*domain.User, len(ms))
 	for i, m := range ms {
-		users[i] = *m.ToDomain()
+		users[i] = m.ToDomain()
 	}
 	return users, nil
 }

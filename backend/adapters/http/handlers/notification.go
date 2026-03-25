@@ -30,7 +30,7 @@ type NotificationResponse struct {
 	CreatedAt string                  `json:"created_at"`
 }
 
-func mapNotificationToResponse(n domain.Notification) NotificationResponse {
+func mapNotificationToResponse(n *domain.Notification) NotificationResponse {
 	return NotificationResponse{
 		ID:        string(n.ID),
 		Type:      n.Type,
@@ -65,7 +65,7 @@ func (h *NotificationHandler) GetForMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if notifications == nil {
-		notifications = []domain.Notification{}
+		notifications = []*domain.Notification{}
 	}
 
 	var newLastID domain.NotificationID

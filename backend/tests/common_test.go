@@ -83,21 +83,9 @@ var phoneCounter int
 func createTestUser(ctx context.Context, ts *TestSuite, email string, bloodType domain.BloodType, lat, lng float64) domain.UserID {
 	phoneCounter++
 	phone := fmt.Sprintf("+88017%08d", phoneCounter)
-	userID, err := ts.userService.Signup(ctx, "Test User", email, "password", phone)
+	userID, err := ts.userService.Signup(ctx, "Test User", email, "password", phone, bloodType, lat, lng)
 	if err != nil {
 		panic("Failed to signup test user: " + err.Error())
-	}
-
-	ctxUser := context.WithValue(ctx, domain.UserIDKey, userID)
-
-	err = ts.userService.UpdateHealth(ctxUser, userID, domain.InfoTypeBloodType, string(bloodType))
-	if err != nil {
-		panic("Failed to update health for test user: " + err.Error())
-	}
-
-	err = ts.userService.UpdateLocation(ctxUser, userID, lat, lng)
-	if err != nil {
-		panic("Failed to update location for test user: " + err.Error())
 	}
 
 	return userID

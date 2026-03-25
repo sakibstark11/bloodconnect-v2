@@ -33,7 +33,7 @@ func (r *notificationRepository) GetNotificationByID(ctx context.Context, id dom
 	return m.ToDomain(), nil
 }
 
-func (r *notificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]domain.Notification, error) {
+func (r *notificationRepository) GetNotificationsForUser(ctx context.Context, userID domain.UserID, lastNotificationID domain.NotificationID, pageSize int) ([]*domain.Notification, error) {
 	var ms []models.Notification
 
 	db := r.db.WithContext(ctx).Model(&models.Notification{}).Where("recipient = ?", string(userID))
@@ -46,9 +46,9 @@ func (r *notificationRepository) GetNotificationsForUser(ctx context.Context, us
 		return nil, err
 	}
 
-	result := make([]domain.Notification, len(ms))
+	result := make([]*domain.Notification, len(ms))
 	for i, m := range ms {
-		result[i] = *m.ToDomain()
+		result[i] = m.ToDomain()
 	}
 	return result, nil
 }

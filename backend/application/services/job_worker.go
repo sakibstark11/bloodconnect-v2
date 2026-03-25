@@ -204,7 +204,7 @@ func (s *jobWorkerService) processWaveSearch(ctx context.Context, job *domain.Jo
 			acceptedUsers++
 		} else if u.Action == domain.ActionStatusDeclined {
 			declinedUsers++
-		} else if s.shouldActionBeConsideredDormant(&u) {
+		} else if s.shouldActionBeConsideredDormant(u) {
 			declinedUsers++
 		} else {
 			pendingUsers++
@@ -298,7 +298,7 @@ func (s *jobWorkerService) getRingHexes(centerCell h3.Cell, ring int) ([]h3.Cell
 	return ringHexes, nil
 }
 
-func (s *jobWorkerService) notifyUsers(ctx context.Context, users *[]domain.User, req *domain.DonationRequest, actionedMap *map[domain.UserID]domain.ActionStatus, usersLeftToSearch *int, reqLogger *zap.Logger) error {
+func (s *jobWorkerService) notifyUsers(ctx context.Context, users *[]*domain.User, req *domain.DonationRequest, actionedMap *map[domain.UserID]domain.ActionStatus, usersLeftToSearch *int, reqLogger *zap.Logger) error {
 	for _, u := range *users {
 		if _, ok := (*actionedMap)[u.ID]; ok {
 			continue

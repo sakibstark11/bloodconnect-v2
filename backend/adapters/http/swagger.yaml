@@ -83,9 +83,9 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  /users/me/location:
-    put:
-      summary: Update preferred donation location for the current user
+  /users/me/locations:
+    post:
+      summary: Add a new preferred donation location
       tags: [Users]
       security:
         - BearerAuth: []
@@ -94,10 +94,30 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateLocationRequest'
+              $ref: '#/components/schemas/AddLocationRequest'
       responses:
         '204':
-          description: Location updated
+          description: Location added
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/me/locations/{h3hex}:
+    delete:
+      summary: Remove a preferred donation location
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: h3hex
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Location removed
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
 
@@ -272,16 +292,28 @@ components:
         name: { type: string }
         email: { type: string }
         phone: { type: string }
+        health:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserHealth'
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserLocation'
         created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     SignupRequest:
       type: object
-      required: [name, email, password, phone]
+      required: [name, email, password, phone, blood_type, lat, lng]
       properties:
         name: { type: string }
         email: { type: string }
         password: { type: string }
         phone: { type: string }
+        blood_type: { type: string }
+        lat: { type: number }
+        lng: { type: number }
 
     LoginRequest:
       type: object
@@ -296,14 +328,20 @@ components:
         id: { type: string }
         token: { type: string }
 
-    UpdateHealthRequest:
+    UserHealth:
       type: object
-      required: [info_type, details]
       properties:
         info_type: { type: string }
         details: { type: string }
 
-    UpdateLocationRequest:
+    UserLocation:
+      type: object
+      properties:
+        lat: { type: number }
+        lng: { type: number }
+        h3_hex: { type: string }
+
+    AddLocationRequest:
       type: object
       required: [lat, lng]
       properties:

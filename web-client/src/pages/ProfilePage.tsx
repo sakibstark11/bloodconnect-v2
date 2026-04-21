@@ -35,7 +35,7 @@ export default function ProfilePage() {
       setUser(updatedUser);
       toast.success("Location added successfully");
     } catch (err) {
-      toast.error(err.message || "Failed to add location");
+      toast.error((err as Error)?.message ?? "Failed to add location");
     } finally {
       setSaving(false);
     }
@@ -49,7 +49,7 @@ export default function ProfilePage() {
       setUser(updatedUser);
       toast.success("Location deleted successfully");
     } catch (err) {
-      toast.error(err.message || "Failed to delete location");
+      toast.error((err as Error)?.message ?? "Failed to delete location");
     }
   };
 

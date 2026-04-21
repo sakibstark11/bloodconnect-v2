@@ -84,8 +84,7 @@ export default function RequestDetailsPage() {
       setData(updated);
       toast.success(`Request ${action.toLowerCase()} successfully`);
     } catch (err) {
-      console.error(err);
-      toast.error(err.message || `Failed to ${action.toLowerCase()} request`);
+      toast.error((err as Error)?.message ?? `Failed to ${action.toLowerCase()} request`);
     } finally {
       setSubmitting(null);
     }

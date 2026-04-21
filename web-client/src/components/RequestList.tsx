@@ -13,6 +13,8 @@ interface RequestListProps {
   selectedRequestId?: string;
   hasMore?: boolean;
   onCreateClick?: () => void;
+  title?: string;
+  showCreate?: boolean;
 }
 
 export default function RequestList({
@@ -24,6 +26,8 @@ export default function RequestList({
   selectedRequestId,
   hasMore,
   onCreateClick,
+  title = 'Active Requests',
+  showCreate = true,
 }: RequestListProps) {
   return (
     /* Changed h-screen to h-full so it inherits the wrapper's calc height.
@@ -33,11 +37,13 @@ export default function RequestList({
       {/* Header: shrink-0 is vital so the search bar doesn't disappear when cards push up */}
       <div className="p-4 border-b flex flex-col gap-4 shrink-0">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold tracking-tight">Active Requests</h2>
-          <Button size="sm" onClick={onCreateClick} className="gap-2">
-            <Plus className="h-4 w-4" />
-            New
-          </Button>
+          <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+          {showCreate && (
+            <Button size="sm" onClick={onCreateClick} className="gap-2">
+              <Plus className="h-4 w-4" />
+              New
+            </Button>
+          )}
         </div>
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -93,7 +99,7 @@ export default function RequestList({
   );
 }
 
-function Droplets(props: any) {
+function Droplets(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       {...props}

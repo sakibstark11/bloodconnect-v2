@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RequestsPage from './pages/RequestsPage';
 import RequestDetailsPage from './pages/RequestDetailsPage';
+import MyRequestsPage from './pages/MyRequestsPage';
 import ProfilePage from './pages/ProfilePage';
 import SignupPage from './pages/SignupPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -33,6 +34,10 @@ const router = createBrowserRouter([
           {
             path: '/requests',
             element: <RequestsPage />,
+          },
+          {
+            path: '/my-requests',
+            element: <MyRequestsPage />,
           },
           {
             path: '/requests/:id',

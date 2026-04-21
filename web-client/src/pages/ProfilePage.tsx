@@ -34,7 +34,7 @@ export default function ProfilePage() {
       const updatedUser = await api.auth.getMe(token);
       setUser(updatedUser);
       toast.success("Location added successfully");
-    } catch (err: any) {
+    } catch (err) {
       toast.error(err.message || "Failed to add location");
     } finally {
       setSaving(false);
@@ -48,7 +48,7 @@ export default function ProfilePage() {
       const updatedUser = await api.auth.getMe(token);
       setUser(updatedUser);
       toast.success("Location deleted successfully");
-    } catch (err: any) {
+    } catch (err) {
       toast.error(err.message || "Failed to delete location");
     }
   };

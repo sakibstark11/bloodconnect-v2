@@ -83,3 +83,14 @@ export interface SignupRequest {
   lat: number;
   lng: number;
 }
+
+export interface CreateRequestRequest {
+  location_name: string;
+  blood_type: BloodType;
+  bag_count: number;
+  required_by_date: string;
+  description?: string;
+  requester_info: string;
+  location_lat: number;
+  location_lng: number;
+}

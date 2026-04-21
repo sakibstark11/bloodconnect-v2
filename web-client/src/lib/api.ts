@@ -1,4 +1,5 @@
 import {
+  type CreateRequestRequest,
   type ExtendedDonationRequest,
   type ListRequestsResponse,
   type LoginResponse,
@@ -64,7 +65,7 @@ export const api = {
     },
     get: (token: string, id: string): Promise<ExtendedDonationRequest> =>
       fetchWithToken(`/requests/${id}`, token),
-    create: (token: string, data: any): Promise<{ id: string }> =>
+    create: (token: string, data: CreateRequestRequest): Promise<{ id: string }> =>
       fetchWithToken('/requests', token, { method: 'POST', body: JSON.stringify(data) }),
     respond: (token: string, id: string, action: string): Promise<void> =>
       fetchWithToken(`/requests/${id}/respond`, token, { method: 'POST', body: JSON.stringify({ action }) }),

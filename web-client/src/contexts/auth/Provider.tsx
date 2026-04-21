@@ -11,7 +11,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       // Simple base64 decoding of the JWT payload
       const payload = JSON.parse(atob(newToken.split('.')[1]));
-      setUserId(payload.userId || payload.sub || null);
+      setUserId(payload.user_id || payload.userId || payload.sub || null);
     } catch (e) {
       console.error('Failed to decode token', e);
       setUserId(null);

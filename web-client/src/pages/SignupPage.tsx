@@ -68,7 +68,7 @@ export default function SignupPage() {
     }
     setLoading(true)
     try {
-      await api.auth.signup(values as any)
+      await api.auth.signup(values)
       navigate("/login")
     } catch (err) {
       console.error(err)

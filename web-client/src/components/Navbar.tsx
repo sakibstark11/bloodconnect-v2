@@ -11,7 +11,7 @@ import NotificationPanel from '@/components/NotificationPanel';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 export default function Navbar() {
-  const { logout, token } = useAuth();
+  const { logout, token, userId } = useAuth();
   const navigate = useNavigate();
 
   // Basic JWT decode for demo (should use a proper lib or handle in AuthProvider)
@@ -27,6 +27,15 @@ export default function Navbar() {
 
         {token && (
           <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-1">
+              <Button asChild variant="ghost" size="sm" className="text-xs">
+                <Link to="/requests">Browse</Link>
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="text-xs">
+                <Link to="/my-requests">My Requests</Link>
+              </Button>
+            </div>
+
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative">
@@ -39,7 +48,7 @@ export default function Navbar() {
               </PopoverContent>
             </Popover>
 
-            <Link to={`/users/${user.id}`}>
+            <Link to={`/users/${userId || user.id}`}>
               <Avatar className="h-8 w-8 cursor-pointer hover:ring-2 ring-primary transition-all">
                 <AvatarFallback className="bg-primary/10 text-primary">{user.name[0]}</AvatarFallback>
               </Avatar>

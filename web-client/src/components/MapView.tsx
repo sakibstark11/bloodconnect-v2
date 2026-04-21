@@ -35,6 +35,8 @@ const statusColorMap: Record<string, string> = {
   Processing: '#8b5cf6', // violet
 };
 
+const requestMarkerColor = '#f43f5e'; // rose (distinct from status colors)
+
 function MapEvents({ onClick }: { onClick?: (lat: number, lng: number) => void }) {
   useMapEvents({
     click(e) {
@@ -50,6 +52,14 @@ function ChangeView({ center, zoom }: { center: [number, number]; zoom: number }
     map.setView(center, zoom);
   }, [center, zoom, map]);
   return null;
+}
+
+function getBoundary(hex: string): [number, number][] {
+  try {
+    return h3.cellToBoundary(hex) as [number, number][];
+  } catch {
+    return [];
+  }
 }
 
 export default function MapView({
@@ -73,20 +83,18 @@ export default function MapView({
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
 
         {markers.map((marker) => {
-          let boundary: [number, number][] = [];
-          try {
-            boundary = h3.cellToBoundary(marker.hex) as [number, number][];
-          } catch (e) {
-            // Non-hex handles (like 'temp') won't render a polygon
-            boundary = [];
-          }
+          const boundary = getBoundary(marker.hex);
 
           const isHighlighted = marker.id === highlightedId;
-          const color = isHighlighted ? '#fff' : (statusColorMap[marker.status] || statusColorMap['Processing']);
+          const baseColor =
+            marker.type === 'request'
+              ? requestMarkerColor
+              : (statusColorMap[marker.status] || statusColorMap['Processing']);
+          const color = isHighlighted ? '#fff' : baseColor;
 
           return (
             <React.Fragment key={marker.id}>
@@ -108,8 +116,8 @@ export default function MapView({
                 pathOptions={{
                   fillColor: color,
                   fillOpacity: 1,
-                  color: isHighlighted ? '#000' : '#fff',
-                  weight: isHighlighted ? 2 : 1,
+                  color: marker.type === 'request' ? '#000' : (isHighlighted ? '#000' : '#fff'),
+                  weight: marker.type === 'request' ? (isHighlighted ? 3 : 2) : (isHighlighted ? 2 : 1),
                 }}
                 interactive={!!onMarkerClick}
                 className={onMarkerClick ? 'cursor-pointer' : ''}

@@ -26,7 +26,7 @@ export default function RequestsPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const filters: any = { status: 'Pending' };
+      const filters = { status: 'Pending' };
       if (isLoadMore && lastId) filters.last_request_id = lastId;
       
       const res = await api.requests.list(token, filters);

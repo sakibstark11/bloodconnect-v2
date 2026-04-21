@@ -40,7 +40,7 @@ export default function RequestDetailsPage() {
 
   const { isEligible, ineligibilityReason } = useMemo(() => {
     if (!user || !data) return { isEligible: true };
-    
+
     // Blood type check
     const userBloodType = user.health?.find(h => h.info_type === 'blood_type')?.details;
     if (userBloodType && userBloodType !== data.request.blood_type) {
@@ -57,10 +57,10 @@ export default function RequestDetailsPage() {
       const lastDonation = new Date(lastDonationStr);
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-      
+
       if (lastDonation > ninetyDaysAgo) {
-        return { 
-          isEligible: false, 
+        return {
+          isEligible: false,
           ineligibilityReason: `Last donation was on ${lastDonation.toLocaleDateString()}. You must wait 90 days between donations.`
         };
       }
@@ -71,7 +71,7 @@ export default function RequestDetailsPage() {
 
   const handleAction = async (action: 'Accepted' | 'Declined') => {
     if (!token || !id) return;
-    
+
     if (action === 'Accepted' && !isEligible) {
       toast.error(ineligibilityReason || "You are not eligible to donate at this time.");
       return;
@@ -83,7 +83,7 @@ export default function RequestDetailsPage() {
       const updated = await api.requests.get(token, id);
       setData(updated);
       toast.success(`Request ${action.toLowerCase()} successfully`);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
       toast.error(err.message || `Failed to ${action.toLowerCase()} request`);
     } finally {
@@ -102,6 +102,7 @@ export default function RequestDetailsPage() {
   if (!data) return <div className="p-8 text-center text-destructive font-bold">Request not found</div>;
 
   const { request, notified_users } = data;
+  const isOwner = !!userId && request.user_id === userId;
 
   const markers: MapMarker[] = [
     {
@@ -125,11 +126,17 @@ export default function RequestDetailsPage() {
 
   const myResponse = notified_users.find(u => u.user_id === userId)?.action;
   const hasResponded = myResponse === 'Accepted' || myResponse === 'Declined';
+  const acceptedUsers = notified_users.filter(u => u.action === 'Accepted');
 
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col md:flex-row relative">
       <div className="absolute top-4 left-4 z-40">
-        <Button variant="outline" size="sm" className="bg-background/80 backdrop-blur-md gap-2 shadow-lg border-white/20" onClick={() => navigate(-1)}>
+        <Button
+          variant="default"
+          size="sm"
+          className="bg-zinc-900 text-zinc-50 hover:bg-zinc-800 backdrop-blur-md gap-2 shadow-lg border-zinc-700/50"
+          onClick={() => navigate(-1)}
+        >
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
@@ -185,42 +192,68 @@ export default function RequestDetailsPage() {
 
           <div className="flex flex-col gap-3 py-4 border-y border-white/5">
             <div className="flex items-center justify-between">
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Your Response</h3>
-              {hasResponded && (
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                {isOwner ? 'Accepted Users' : 'Your Response'}
+              </h3>
+              {!isOwner && hasResponded && (
                 <Badge variant="secondary" className="gap-1 text-[10px] h-5 px-1.5 font-medium">
                   {myResponse === 'Accepted' ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
                   {myResponse}
                 </Badge>
               )}
             </div>
-            
-            {!isEligible && !hasResponded && (
+
+            {!isOwner && !isEligible && !hasResponded && (
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-2 flex items-start gap-2 text-[10px] text-amber-500">
                 <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
                 <p>{ineligibilityReason}</p>
               </div>
             )}
 
-            <div className="flex gap-3">
-              <Button
-                className="flex-1 gap-2 h-10 text-sm font-bold"
-                variant={myResponse === 'Accepted' ? 'default' : 'outline'}
-                disabled={submitting !== null || request.status !== 'Pending' || hasResponded || !isEligible}
-                onClick={() => handleAction('Accepted')}
-              >
-                {submitting === 'Accepted' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Accept
-              </Button>
-              <Button
-                className="flex-1 gap-2 h-10 text-sm font-bold"
-                variant={myResponse === 'Declined' ? 'destructive' : 'outline'}
-                disabled={submitting !== null || request.status !== 'Pending' || hasResponded}
-                onClick={() => handleAction('Declined')}
-              >
-                {submitting === 'Declined' ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-                Decline
-              </Button>
-            </div>
+            {isOwner ? (
+              <div className="flex flex-col gap-2">
+                {acceptedUsers.map((u) => (
+                  <div
+                    key={u.user_id}
+                    className="flex items-center justify-between p-2.5 rounded-lg border text-xs bg-card/40 border-white/5"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+                      <span className="font-medium">{`User ${u.user_id.slice(-6)}`}</span>
+                    </div>
+                    <Badge variant="ghost" className="text-[9px] h-4 px-1 capitalize font-normal opacity-70">
+                      Accepted
+                    </Badge>
+                  </div>
+                ))}
+                {acceptedUsers.length === 0 && (
+                  <div className="text-xs text-muted-foreground/70">
+                    No one has accepted yet.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1 gap-2 h-10 text-sm font-bold"
+                  variant={myResponse === 'Accepted' ? 'default' : 'outline'}
+                  disabled={submitting !== null || request.status !== 'Pending' || hasResponded || !isEligible}
+                  onClick={() => handleAction('Accepted')}
+                >
+                  {submitting === 'Accepted' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Accept
+                </Button>
+                <Button
+                  className="flex-1 gap-2 h-10 text-sm font-bold"
+                  variant={myResponse === 'Declined' ? 'destructive' : 'outline'}
+                  disabled={submitting !== null || request.status !== 'Pending' || hasResponded}
+                  onClick={() => handleAction('Declined')}
+                >
+                  {submitting === 'Declined' ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                  Decline
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-3 flex-1 min-h-0">

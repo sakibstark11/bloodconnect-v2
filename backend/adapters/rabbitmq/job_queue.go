@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"bloodconnect/application"
 	"bloodconnect/application/domain"
@@ -16,6 +17,10 @@ type rabbitMQJobQueue struct {
 	channel *amqp.Channel
 	queues  map[domain.JobType]string
 }
+
+const (
+	delayedExchangeName = "jobs_delayed_exchange"
+)
 
 func NewJobQueue(url string) (application.JobQueue, error) {
 	conn, err := amqp.Dial(url)
@@ -35,6 +40,20 @@ func NewJobQueue(url string) (application.JobQueue, error) {
 		domain.JobTypeCheckResponses: "check_responses_jobs",
 	}
 
+	if err := ch.ExchangeDeclare(
+		delayedExchangeName,                    // name
+		"x-delayed-message",                    // kind
+		true,                                   // durable
+		false,                                  // auto-delete
+		false,                                  // internal
+		false,                                  // no-wait
+		amqp.Table{"x-delayed-type": "direct"}, // args
+	); err != nil {
+		ch.Close()
+		conn.Close()
+		return nil, fmt.Errorf("failed to declare delayed exchange: %w", err)
+	}
+
 	for _, qName := range queues {
 		_, err := ch.QueueDeclare(
 			qName, // name
@@ -48,6 +67,18 @@ func NewJobQueue(url string) (application.JobQueue, error) {
 			ch.Close()
 			conn.Close()
 			return nil, fmt.Errorf("failed to declare queue %s: %w", qName, err)
+		}
+
+		if err := ch.QueueBind(
+			qName,               // name
+			qName,               // key
+			delayedExchangeName, // exchange
+			false,               // no-wait
+			nil,                 // args
+		); err != nil {
+			ch.Close()
+			conn.Close()
+			return nil, fmt.Errorf("failed to bind queue %s to delayed exchange: %w", qName, err)
 		}
 	}
 
@@ -69,15 +100,29 @@ func (q *rabbitMQJobQueue) Enqueue(ctx context.Context, job *domain.Job) error {
 		return fmt.Errorf("failed to marshal job: %w", err)
 	}
 
+	publishing := amqp.Publishing{
+		ContentType:  "application/json",
+		Body:         body,
+		DeliveryMode: amqp.Persistent,
+	}
+
+	if !job.RunAt.ToTime().IsZero() {
+		delay := time.Until(job.RunAt.ToTime())
+		if delay > 0 {
+			// x-delay is in milliseconds and must be an integer.
+			publishing.Headers = amqp.Table{
+				"x-delay": delay.Milliseconds(),
+			}
+		}
+	}
+
 	return q.channel.PublishWithContext(ctx,
-		"",    // exchange
-		qName, // routing key
-		false, // mandatory
-		false, // immediate
-		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        body,
-		})
+		delayedExchangeName, // exchange
+		qName,               // routing key
+		false,               // mandatory
+		false,               // immediate
+		publishing,
+	)
 }
 
 func (q *rabbitMQJobQueue) Consume(ctx context.Context, jobType domain.JobType) (<-chan *domain.Job, error) {

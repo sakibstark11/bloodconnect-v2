@@ -172,7 +172,7 @@ func (h *RequestHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	requests, err := h.service.ListRequests(r.Context(), filters, lastRequestID, pageSize)
 	if err != nil {
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to list requests", err.Error())
+		RespondWithError(w, err)
 		return
 	}
 	if requests == nil {
@@ -205,11 +205,11 @@ func (h *RequestHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	req, err := h.service.GetExtendedRequest(r.Context(), requestID)
 	if err != nil {
-		RespondJSONError(w, http.StatusInternalServerError, "Failed to get request", err.Error())
+		RespondWithError(w, err)
 		return
 	}
 	if req == nil {
-		RespondJSONError(w, http.StatusNotFound, "Request not found", nil)
+		RespondWithError(w, domain.ErrRequestNotFound)
 		return
 	}
 

@@ -36,6 +36,9 @@ func RespondWithError(w http.ResponseWriter, err error) {
 	if errors.Is(err, domain.ErrUnauthorized) {
 		statusCode = http.StatusUnauthorized
 		message = "Unauthorized"
+	} else if errors.Is(err, domain.ErrForbidden) {
+		statusCode = http.StatusForbidden
+		message = "Forbidden"
 	} else if errors.Is(err, domain.ErrUserNotFound) || errors.Is(err, domain.ErrRequestNotFound) {
 		statusCode = http.StatusNotFound
 		message = "Resource not found"

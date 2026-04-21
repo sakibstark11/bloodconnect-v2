@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"bloodconnect/application"
@@ -149,9 +150,11 @@ func (q *rabbitMQJobQueue) Consume(ctx context.Context, jobType domain.JobType) 
 		defer close(jobChan)
 		for d := range msgs {
 			var job domain.Job
-			if err := json.Unmarshal(d.Body, &job); err == nil {
-				jobChan <- &job
+			if err := json.Unmarshal(d.Body, &job); err != nil {
+				log.Printf("rabbitmq: failed to unmarshal job (queue=%s): %v", qName, err)
+				continue
 			}
+			jobChan <- &job
 		}
 	}()
 

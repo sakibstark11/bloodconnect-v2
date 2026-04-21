@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"bloodconnect/application"
@@ -108,7 +107,7 @@ func (s *requestService) CancelRequest(ctx context.Context, userID domain.UserID
 	}
 
 	if req.UserID != userID {
-		return errors.New("unauthorized to cancel this request")
+		return domain.ErrForbidden
 	}
 
 	req.Status = domain.RequestStatusCancelled

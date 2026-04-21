@@ -7,6 +7,7 @@ var (
 	ErrBloodTypeUpdateDenied    = errors.New("blood type cannot be updated once it is set")
 	ErrUserNotFound             = errors.New("user not found")
 	ErrUnauthorized             = errors.New("unauthorized")
+	ErrForbidden                = errors.New("forbidden")
 	ErrPendingRequestExists     = errors.New("you already have a pending request")
 	ErrIncompatibleBloodType    = errors.New("incompatible blood type")
 	ErrCannotActOnOwnRequest    = errors.New("you cannot act on your own request")
